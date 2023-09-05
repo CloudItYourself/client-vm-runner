@@ -1,3 +1,5 @@
 python-socketio
 jsonschema
 aioboto3
+websocket-client
+psutil
