@@ -1,10 +1,8 @@
-import time
-
 import psutil
 import logging
 import socketio
 from typing import Final
-
+from asyncio import sleep as aiosleep
 from worker_manager import LOGGER_NAME
 from worker_manager.monitoring.messages import WorkerMetrics
 
@@ -34,4 +32,4 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
     async def background_task(managers_connection_handler: 'WorkerManagersConnectionHandler'):
         while True:
             await managers_connection_handler.send_metrics_report()
-            time.sleep(managers_connection_handler.INTERVAL_BETWEEN_METRICS_IN_SEC)
+            await aiosleep(managers_connection_handler.INTERVAL_BETWEEN_METRICS_IN_SEC)
