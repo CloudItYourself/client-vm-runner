@@ -3,3 +3,4 @@ jsonschema
 aioboto3
 websocket-client
 psutil
+qemu.qmp
