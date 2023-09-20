@@ -2,5 +2,6 @@ python-socketio
 jsonschema
 aioboto3
 websocket-client
+websockets
 psutil
-qemu.qmp
+socketify
