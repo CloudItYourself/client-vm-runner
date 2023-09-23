@@ -6,12 +6,12 @@ from concurrent.futures import ProcessPoolExecutor
 from json import JSONDecodeError
 from typing import Union, Dict
 
-import jsonschema
-from jsonschema.exceptions import ValidationError
+from pydantic import ValidationError
 from websockets.server import serve
 
 from internal_contoller.kubernetes.kube_handler import KubeHandler
-from internal_contoller.startup.schema import HANDSHAKE_RECEPTION_SCHEMA, HandshakeResponse, HandshakeStatus
+from internal_contoller.startup.schema import HandshakeResponse, HandshakeStatus
+from worker_manager.vm_manager.schema import HandshakeReceptionMessage
 
 
 class Initializer:
@@ -34,25 +34,23 @@ class Initializer:
         while True:
             try:
                 data = json.loads(await websocket.recv())
-                jsonschema.validate(data, HANDSHAKE_RECEPTION_SCHEMA)
+                response = HandshakeReceptionMessage(**data)
                 if not self._kube_handler.kube_ready:
-                    await websocket.send(json.dumps(
+                    await websocket.send(
                         HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Installing k3s",
-                                          SECRET_KEY=data['secret_key'])))
+                                          SECRET_KEY=response.secret_key).model_dump_json())
                     await self.loop.run_in_executor(ProcessPoolExecutor(), self.prepare_kube)
 
                 if not self._kube_handler.kube_ready:
                     err_msg = 'Failed to install kubernetes.. terminating'
-                    await websocket.send(
-                        json.dumps(HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg,
-                                                     SECRET_KEY=data['secret_key'])))
+                    await websocket.send(HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg,
+                                                           SECRET_KEY=response.secret_key).model_dump_json())
                     self.stop_event.set()
                     raise Exception(err_msg)
 
                 self._initialization_data = data
-                await websocket.send(
-                    json.dumps(HandshakeResponse(STATUS=HandshakeStatus.SUCCESS, DESCRIPTION="Details received",
-                                                 SECRET_KEY=data['secret_key'])))
+                await websocket.send(HandshakeResponse(STATUS=HandshakeStatus.SUCCESS, DESCRIPTION="Details received",
+                                                       SECRET_KEY=response.secret_key).model_dump_json())
                 self.stop_event.set()
 
             except ValidationError as e:

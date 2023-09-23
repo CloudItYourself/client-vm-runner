@@ -29,8 +29,8 @@ class ControllerInitializer:
         try:
             connection = await asyncio.wait_for(websockets.connect(f"ws://localhost:{self._vm_port}"),
                                                 ControllerInitializer.VM_STARTUP_TIMEOUT_SECS)
-            await connection.send(json.dumps(
-                HandshakeReceptionMessage(ip=self._server_ip, port=self._server_port, secret_key=self._secret_key)))
+            await connection.send(HandshakeReceptionMessage(ip=self._server_ip, port=self._server_port,
+                                                            secret_key=self._secret_key).model_dump_json())
             data = await asyncio.wait_for(connection.recv(), ControllerInitializer.INITIAL_RESPONSE_TIMEOUT_SECS)
             print("xd")
         except ConnectionTimeoutError as e:

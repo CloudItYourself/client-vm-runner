@@ -1,7 +1,8 @@
 from typing import TypedDict
+from pydantic import BaseModel
 
 
-class HandshakeReceptionMessage(TypedDict):
+class HandshakeReceptionMessage(BaseModel):
     ip: str
     port: int
     secret_key: str
