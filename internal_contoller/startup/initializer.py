@@ -61,7 +61,7 @@ class Initializer:
                     f"Received non-json message.. ignoring")
 
     async def run_until_handshake_complete(self):
-        async with serve(self.handler, "localhost", self._port):
+        async with serve(self.handler, "0.0.0.0", self._port):
             await self.stop
 
     def run(self):

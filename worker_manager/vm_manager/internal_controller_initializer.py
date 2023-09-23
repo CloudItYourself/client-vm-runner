@@ -25,9 +25,9 @@ class ControllerInitializer:
         letters = string.ascii_lowercase
         return ''.join(random.choice(letters) for i in range(length))
 
-    def wait_for_vm_connection(self):
+    async def wait_for_vm_connection(self):
         try:
-            connection = await asyncio.wait_for(websockets.connect(f"ws://localhost:{self._vm_port}"),
+            connection = await asyncio.wait_for(websockets.connect(f"ws://127.0.0.1:{self._vm_port}"),
                                                 ControllerInitializer.VM_STARTUP_TIMEOUT_SECS)
             await connection.send(HandshakeReceptionMessage(ip=self._server_ip, port=self._server_port,
                                                             secret_key=self._secret_key).model_dump_json())
@@ -35,3 +35,8 @@ class ControllerInitializer:
             print("xd")
         except ConnectionTimeoutError as e:
             raise Exception("Failed to connect to vm")
+
+
+if __name__ == '__main__':
+    xd = ControllerInitializer("127.0.0.1", 8080, 51137)
+    asyncio.get_event_loop().run_until_complete(xd.wait_for_vm_connection())
