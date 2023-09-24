@@ -4,31 +4,38 @@ import logging
 import threading
 from concurrent.futures import ProcessPoolExecutor
 from json import JSONDecodeError
-from typing import Union, Dict
+from typing import Final
 
+import socketio
 from pydantic import ValidationError
 from websockets.server import serve
 
-from internal_contoller.kubernetes.kube_handler import KubeHandler
-from internal_contoller.startup.schema import HandshakeResponse, HandshakeStatus
+from internal_controller.kubernetes.kube_handler import KubeHandler
+from internal_controller.connection.schema import HandshakeResponse, HandshakeStatus
 from worker_manager.vm_manager.schema import HandshakeReceptionMessage
 
 
-class Initializer:
+class ConnectionHandler(socketio.AsyncClientNamespace):
+    NAMESPACE: Final[str] = '/vm_connection'
+
     def __init__(self, port: int):
+        super().__init__(ConnectionHandler.NAMESPACE)
+
         self.stop_event = threading.Event()
         self.loop = asyncio.get_event_loop()
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
         self._port = port
         self._kube_handler = KubeHandler()
         self._initialization_data = None
+        self._client = None
 
     @property
-    def initialization_data(self) -> Dict[str, Union[str, int]]:
+    def initialization_data(self) -> HandshakeReceptionMessage:
         return self._initialization_data
 
-    def prepare_kube(self):
-        self._kube_handler.initialize()
+    @staticmethod
+    def prepare_kube(kube_handler: 'KubeHandler'):
+        kube_handler.initialize()
 
     async def handler(self, websocket, path):
         while True:
@@ -39,7 +46,8 @@ class Initializer:
                     await websocket.send(
                         HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Installing k3s",
                                           SECRET_KEY=response.secret_key).model_dump_json())
-                    await self.loop.run_in_executor(ProcessPoolExecutor(), self.prepare_kube)
+                    await self.loop.run_in_executor(ProcessPoolExecutor(), ConnectionHandler.prepare_kube,
+                                                    self._kube_handler)
 
                 if not self._kube_handler.kube_ready:
                     err_msg = 'Failed to install kubernetes.. terminating'
@@ -64,6 +72,15 @@ class Initializer:
         async with serve(self.handler, "0.0.0.0", self._port):
             await self.stop
 
+    async def connect_to_server(self):
+        self._client = socketio.AsyncClient()
+        self._client.register_namespace(self)
+        await self._client.connect(f'http:{self.initialization_data.ip}:{HandshakeReceptionMessage.port}')
+
     def run(self):
         self.loop.run_until_complete(self.run_until_handshake_complete())
+        self.loop.run_until_complete(self.connect_to_server())
         print("Connection accepted")
+
+        while True:
+            self.loop.run_until_complete(asyncio.sleep(1))

@@ -1,6 +1,5 @@
 import pathlib
 import time
-import socket
 from subprocess import Popen, PIPE
 
 
@@ -16,25 +15,16 @@ class QemuInitializer:
         self._memory_size = memory_size
         self._vm_subprocess = None
 
-    @staticmethod
-    def get_available_port() -> int:
-        sock = socket.socket()
-        sock.bind(('', 0))
-        port = sock.getsockname()[1]
-        sock.close()
-        print(port)
-        return port
-
-    def run_vm(self):
+    def run_vm(self, forwarding_port: int):
         command = QemuInitializer.QEMU_COMMAND.format(cpu=self._core_count, memory=self._memory_size,
                                                       image=self._image_location, file=__file__,
-                                                      tcp_port=QemuInitializer.get_available_port())
+                                                      tcp_port=forwarding_port)
         self._vm_subprocess = Popen(command, stdout=PIPE, stdin=PIPE, stderr=PIPE)
 
 
 if __name__ == '__main__':
     vm_manager = QemuInitializer(2, 3096)
-    vm_manager.run_vm()
+    vm_manager.run_vm(55555)
     input()
     print("waiting")
     time.sleep(100000)

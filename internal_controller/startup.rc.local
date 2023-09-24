@@ -1,0 +1,14 @@
+#!/bin/sh -e
+#
+# rc.local
+#
+# This script is executed at the end of each multiuser runlevel.
+# Ensure that the script will "exit 0" on success or any other
+# value on error.
+#
+# To enable or disable this script, just change the execution
+# bits.
+#
+# By default, this script does nothing.
+/usr/bin/python3 /usr/src/app/internal_controller/main.py &
+exit 0
