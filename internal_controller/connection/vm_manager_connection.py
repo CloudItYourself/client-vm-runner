@@ -8,6 +8,7 @@ from typing import Final
 
 import socketio
 from pydantic import ValidationError
+from websockets.exceptions import ConnectionClosedOK
 from websockets.server import serve
 
 from internal_controller.kubernetes.kube_handler import KubeHandler
@@ -53,20 +54,28 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
                     err_msg = 'Failed to install kubernetes.. terminating'
                     await websocket.send(HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg,
                                                            SECRET_KEY=response.secret_key).model_dump_json())
-                    self.stop_event.set()
+                    await self.close_comms()
                     raise Exception(err_msg)
 
                 self._initialization_data = data
                 await websocket.send(HandshakeResponse(STATUS=HandshakeStatus.SUCCESS, DESCRIPTION="Details received",
                                                        SECRET_KEY=response.secret_key).model_dump_json())
-                self.stop_event.set()
+                await self.close_comms()
 
             except ValidationError as e:
                 logging.error(
                     f"Received invalid internal initialization data, validation error: {e.cause}, worker will be ignored")
+
+            except ConnectionClosedOK as e:
+                return
+
             except JSONDecodeError as e:
                 logging.error(
                     f"Received non-json message.. ignoring")
+
+    async def close_comms(self):
+        await asyncio.sleep(2)
+        self.stop_event.set()
 
     async def run_until_handshake_complete(self):
         async with serve(self.handler, "0.0.0.0", self._port):
