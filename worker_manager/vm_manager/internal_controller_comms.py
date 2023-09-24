@@ -70,7 +70,7 @@ class InternalControllerComms(socketio.AsyncNamespace):
                 except ValidationError as e:
                     raise Exception(f"Failed to parse veirfy data: {data}")
                 except ConnectionClosedOK as e:
-                    pass
+                    return
                 finally:
                     await connection.close()
 
