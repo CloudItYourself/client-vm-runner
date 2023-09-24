@@ -84,7 +84,7 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
     async def connect_to_server(self):
         self._client = socketio.AsyncClient()
         self._client.register_namespace(self)
-        await self._client.connect(f'http:{self.initialization_data.ip}:{HandshakeReceptionMessage.port}')
+        await self._client.connect(f'http://{self.initialization_data.ip}:{self.initialization_data.port}')
 
     def run(self):
         self.loop.run_until_complete(self.run_until_handshake_complete())

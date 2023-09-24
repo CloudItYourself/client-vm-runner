@@ -9,4 +9,4 @@ COPY setup.py /usr/src/app/setup.py
 COPY internal_controller/startup.rc.local /etc/rc.local
 RUN chmod +x /etc/rc.local
 RUN cd /usr/src/app && python3 internal_controller_setup.py install
-RUN pip3 install websockets pydantic python-socketio uvicorn websocket-client
+RUN pip3 install websockets pydantic python-socketio uvicorn websocket-client aiohttp
