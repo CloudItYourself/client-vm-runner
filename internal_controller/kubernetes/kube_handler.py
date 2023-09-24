@@ -14,7 +14,7 @@ class KubeHandler:
         return os.system('curl -sfL https://get.k3s.io | sh - ') == 0 and os.system('kubectl --version') == 0
 
     def initialize(self):
-        ret_code = os.system('kubectl --version')
+        ret_code = os.system('kubectl --help')
         if ret_code == 0:
             self._kube_ready = True
         else:

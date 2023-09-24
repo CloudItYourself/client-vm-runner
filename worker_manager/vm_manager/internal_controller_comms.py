@@ -18,7 +18,7 @@ import socketio
 
 
 class InternalControllerComms(socketio.AsyncNamespace):
-    VM_STARTUP_TIMEOUT_SECS: Final[int] = 120
+    VM_STARTUP_TIMEOUT_SECS: Final[int] = 60
     INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 5
     NAMESPACE: Final[str] = '/vm_connection'
 
@@ -48,17 +48,23 @@ class InternalControllerComms(socketio.AsyncNamespace):
         return ''.join(random.choice(letters) for i in range(length))
 
     async def wait_for_vm_connection(self):
+        connection = None
         try:
             await asyncio.sleep(InternalControllerComms.VM_STARTUP_TIMEOUT_SECS)  # allow for startup to occur
+
             connection = await websockets.connect(f"ws://127.0.0.1:{self._vm_port}",
                                                   timeout=InternalControllerComms.VM_STARTUP_TIMEOUT_SECS)
+            logging.info("Accepted connection from internal vm process")
             await connection.send(HandshakeReceptionMessage(ip=self._server_ip, port=self._server_port,
                                                             secret_key=self._secret_key).model_dump_json())
+            logging.info("Sent handshake details")
             connection_complete = False
             while not connection_complete:
-                data = json.loads(await asyncio.wait_for(connection.recv(), InternalControllerComms.INITIAL_RESPONSE_TIMEOUT_SECS))
+                data = json.loads(await connection.recv())
                 try:
                     response = HandshakeResponse(**data)
+                    logging.info(
+                        f"Received handshake with status: {response.STATUS}, description: {response.DESCRIPTION}")
                     if response.SECRET_KEY != self._secret_key:
                         raise Exception(f"Secret key does not match!! Major error")
                     elif response.STATUS == HandshakeStatus.FAILURE:
@@ -71,11 +77,13 @@ class InternalControllerComms(socketio.AsyncNamespace):
                     raise Exception(f"Failed to parse veirfy data: {data}")
                 except ConnectionClosedOK as e:
                     return
-                finally:
-                    await connection.close()
+
 
         except TimeoutError as e:
             raise Exception("Failed to connect to vm")
+        finally:
+            if connection is not None:
+                await connection.close()
 
     async def on_connect(self, sid: str, environ: Dict[str, str]):
         if self._vm_connected and self._vm_ready:

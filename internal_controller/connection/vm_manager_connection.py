@@ -57,7 +57,7 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
                     await self.close_comms()
                     raise Exception(err_msg)
 
-                self._initialization_data = data
+                self._initialization_data = response
                 await websocket.send(HandshakeResponse(STATUS=HandshakeStatus.SUCCESS, DESCRIPTION="Details received",
                                                        SECRET_KEY=response.secret_key).model_dump_json())
                 await self.close_comms()
