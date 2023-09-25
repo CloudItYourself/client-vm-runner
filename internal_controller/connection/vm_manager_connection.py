@@ -65,6 +65,7 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
                 await websocket.send(HandshakeResponse(STATUS=HandshakeStatus.SUCCESS, DESCRIPTION="Details received",
                                                        SECRET_KEY=response.secret_key).model_dump_json())
                 await self.close_comms(websocket)
+                return
 
             except ValidationError as e:
                 logging.error(
@@ -72,10 +73,13 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
 
             except ConnectionClosedOK as e:
                 return
+            except ConnectionResetError as e:
+                return
 
             except JSONDecodeError as e:
                 logging.error(
                     f"Received non-json message.. ignoring")
+                return
 
     async def close_comms(self, websocket):
         await websocket.close()
