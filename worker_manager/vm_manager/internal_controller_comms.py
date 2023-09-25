@@ -25,7 +25,8 @@ class InternalControllerComms(socketio.AsyncNamespace):
     TIMEOUT_RETRY_COUNT: Final[int] = 10
     TIMEOUT_BETWEEN_RUNS: Final[int] = 10
     VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC: Final[int] = 2
-    INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 5
+    INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 20
+    HELLO_MSG_TIMEOUT_SECS: Final[int] = 5
     NAMESPACE: Final[str] = '/vm_connection'
 
     def __init__(self, core_count: int, memory_size: int,
@@ -79,9 +80,14 @@ class InternalControllerComms(socketio.AsyncNamespace):
                                                             secret_key=self._secret_key).model_dump_json())
             logging.info("Sent handshake details")
             connection_complete = False
+            first_msg = True
             while not connection_complete:
-                raw_data = await asyncio.wait_for(
-                    connection.recv(), InternalControllerComms.INITIAL_RESPONSE_TIMEOUT_SECS)
+                if first_msg:
+                    raw_data = await asyncio.wait_for(await connection.recv(),
+                                                      InternalControllerComms.VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC)
+                    first_msg = False
+                else:
+                    raw_data = await connection.recv()
                 data = json.loads(raw_data)
                 try:
                     response = HandshakeResponse(**data)
@@ -107,13 +113,15 @@ class InternalControllerComms(socketio.AsyncNamespace):
                 await connection.close()
 
     async def on_hello(self, sid, data):
+        print("hi")
         data = PassThroughMessage(**json.loads(data))
         # data = self._cypher.decrypt_and_verify(data.DATA, data.TAG)
         if data.DATA == HELLO_MSG:
             self._vm_validated = True
 
     async def wait_for_hello_message(self):
-        await asyncio.sleep(InternalControllerComms.INITIAL_RESPONSE_TIMEOUT_SECS)
+        await asyncio.sleep(InternalControllerComms.HELLO_MSG_TIMEOUT_SECS)
+
         if not self._vm_validated:
             logging.warning("Disconnecting vm")
             await self.disconnect(self._current_vm_sid)
