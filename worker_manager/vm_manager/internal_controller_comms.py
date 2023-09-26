@@ -83,7 +83,7 @@ class InternalControllerComms(socketio.AsyncNamespace):
             first_msg = True
             while not connection_complete:
                 if first_msg:
-                    raw_data = await asyncio.wait_for(await connection.recv(),
+                    raw_data = await asyncio.wait_for(connection.recv(),
                                                       InternalControllerComms.VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC)
                     first_msg = False
                 else:
