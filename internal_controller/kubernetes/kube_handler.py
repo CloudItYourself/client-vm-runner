@@ -1,3 +1,4 @@
+import logging
 import os
 import string
 import sys
@@ -6,6 +7,7 @@ from typing import Final, Dict, Optional
 
 import kubernetes
 from kubernetes import client
+from kubernetes.client import ApiException
 
 
 class KubeHandler:
@@ -43,26 +45,75 @@ class KubeHandler:
             kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
             self._kube_client = kubernetes.client.CoreV1Api()
 
-    def run_pod(self, image_name: str, version: str, environment: Dict[str, str]) -> str:
+    def run_pod(self, image_name: str, version: str, environment: Dict[str, str], namespace: str) -> Optional[str]:
         generated_image_name = f'{image_name}-{self.generate_random_string(10)}'
-        pod = client.V1Pod(metadata=client.V1ObjectMeta(name=generated_image_name), spec=client.V1PodSpec(containers=[
-            client.V1Container(name=generated_image_name, image=f'{image_name}:{version}')]))
+        full_image_name = f'{image_name}:{version}'
+        container = client.V1Container(
+            name=generated_image_name,
+            image=full_image_name,
+            env=[client.V1EnvVar(name=key, value=value) for key, value in environment.items()]
+        )
 
-        self._kube_client.create_namespaced_pod(body=pod, namespace="default")
-        return generated_image_name
+        pod_spec = client.V1PodSpec(
+            containers=[container]
+        )
 
-    def kill_pod(self):
-        pass
+        pod_manifest = client.V1Pod(
+            metadata=client.V1ObjectMeta(name=generated_image_name),
+            spec=pod_spec
+        )
 
-    def get_util(self):
-        pass
+        try:
+            api_response = self._kube_client.create_namespaced_pod(body=pod_manifest, namespace=namespace)
+            if api_response.status == "Success":
+                return generated_image_name
+            else:
+                logging.error(f"Pod creation was not successful. Status: {api_response.status}")
+                return None
+        except ApiException as e:
+            logging.error(f"Exception when calling CoreV1Api->create_namespaced_pod: {e}")
+            return None
+
+    def create_namespace(self, namespace: str) -> bool:
+        try:
+            api_response = self._kube_client.create_namespace(
+                client.V1Namespace(metadata=client.V1ObjectMeta(name=namespace)))
+            return api_response.status == "Success"
+        except ApiException as e:
+            logging.error(f"Exception when calling CoreV1Api->create_namespace: {e}")
+            return False
+
+    def delete_pod(self, pod_name: str, namespace: str) -> bool:
+        try:
+            api_response = self._kube_client.delete_namespaced_pod(pod_name, namespace)
+            return api_response.status == "Success"
+        except ApiException as e:
+            logging.error(f"Exception when calling CoreV1Api->delete_namespaced_pod: {e}")
+            return False
+
+    def delete_all_pods_in_namespace(self, namespace: str) -> bool:
+        try:
+            api_response = self._kube_client.delete_collection_namespaced_pod(namespace)
+            return api_response.status == "Success"
+        except ApiException as e:
+            logging.error(f"Exception when calling CoreV1Api->delete_collection_namespaced_pod: {e}")
+            return False
+
+    def get_pod_details(self, pod_name: str, namespace: str):
+        # TODO check all the return values, they do not match
+        # TODO ADD PROMEHEUS
+        try:
+            api_response = self._kube_client.read_namespaced_pod(pod_name, namespace)
+            return api_response
+        except ApiException as e:
+            logging.error(f"Exception when calling CoreV1Api->read_namespaced_pod: {e}")
 
 
 if __name__ == '__main__':
     xd = KubeHandler()
     xd.initialize()
+    xd.create_namespace('tpc-workers')
+    xd.run_pod("nginx", "latest", {}, 'tpc-workers')
     ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
-    xd.run_pod("nginx", "latest", {})
     for i in ret.items:
         print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
-
