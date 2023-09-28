@@ -3,6 +3,7 @@ import os
 import string
 import sys
 import random
+import time
 from typing import Final, Dict, Optional
 
 import kubernetes
@@ -11,6 +12,7 @@ from kubernetes.client import ApiException
 
 
 class KubeHandler:
+    POD_MAX_STARTUP_TIME_IN_MINUTES: Final[int] = 3
     LINUX_K3S_CONFIG_LOCATION: Final[str] = '/etc/rancher/k3s/k3s.yaml'
     WINDOWS_MINIKUBE_CONFIG_LOCATION: Final[str] = f"{os.environ['USERPROFILE']}\\.kube\\config"
     RELEVANT_CONFIG_FILE = LINUX_K3S_CONFIG_LOCATION if sys.platform == 'linux' else WINDOWS_MINIKUBE_CONFIG_LOCATION
@@ -45,6 +47,21 @@ class KubeHandler:
             kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
             self._kube_client = kubernetes.client.CoreV1Api()
 
+    def verify_pod_successful_startup(self, pod_name: str, namespace: str) -> bool:
+        start_time = time.time()
+        while True:
+            try:
+                api_response = self._kube_client.read_namespaced_pod(pod_name, namespace=namespace)
+                if api_response.status.phase != 'Pending':
+                    return api_response.status.phase == "Running"
+                current_time = time.time()
+                if current_time - start_time > KubeHandler.POD_MAX_STARTUP_TIME_IN_MINUTES * 60:
+                    return False
+                time.sleep(0.2)
+            except ApiException as e:
+                logging.error(f"Exception when calling CoreV1Api->read_namespaced_pod: {e}")
+                return False
+
     def run_pod(self, image_name: str, version: str, environment: Dict[str, str], namespace: str) -> Optional[str]:
         generated_image_name = f'{image_name}-{self.generate_random_string(10)}'
         full_image_name = f'{image_name}:{version}'
@@ -64,12 +81,15 @@ class KubeHandler:
         )
 
         try:
-            api_response = self._kube_client.create_namespaced_pod(body=pod_manifest, namespace=namespace)
-            if api_response.status == "Success":
-                return generated_image_name
-            else:
-                logging.error(f"Pod creation was not successful. Status: {api_response.status}")
+            self._kube_client.create_namespaced_pod(body=pod_manifest, namespace=namespace)
+            startup_successful = self.verify_pod_successful_startup(pod_name=generated_image_name, namespace=namespace)
+
+            if not startup_successful:
+                logging.error(f"Pod creation was not successful.")
+                self.delete_pod(pod_name=generated_image_name, namespace=namespace)
                 return None
+            return generated_image_name
+
         except ApiException as e:
             logging.error(f"Exception when calling CoreV1Api->create_namespaced_pod: {e}")
             return None
@@ -112,8 +132,9 @@ class KubeHandler:
 if __name__ == '__main__':
     xd = KubeHandler()
     xd.initialize()
+    xd.delete_all_pods_in_namespace('tpc-workers')
     xd.create_namespace('tpc-workers')
-    xd.run_pod("nginxsss", "latest", {}, 'tpc-workers')
+    xd.run_pod("nginx", "latest", {}, 'tpc-workers')
     ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
     for i in ret.items:
         print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
