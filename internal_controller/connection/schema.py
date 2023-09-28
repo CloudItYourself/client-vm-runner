@@ -11,4 +11,3 @@ class HandshakeStatus(Enum):
 class HandshakeResponse(BaseModel):
     STATUS: HandshakeStatus
     DESCRIPTION: str
-    SECRET_KEY: str
