@@ -18,6 +18,7 @@ from websockets.exceptions import ConnectionClosed
 from websockets.server import serve
 
 from internal_controller.connection.schema import HandshakeResponse, HandshakeStatus
+from utilities.messages import ExecutionRequest, CommandOptions, ExecutionResponse, CommandResult
 from worker_manager.vm_manager.schema import HandshakeReceptionMessage
 
 
@@ -43,7 +44,7 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
     def prepare_kube(kube_handler: 'KubeHandler'):
         kube_handler.initialize()
 
-    async def handler(self, websocket, path):
+    async def initial_handshake_handler(self, websocket, path):
         while True:
             try:
                 data = json.loads(await websocket.recv())
@@ -85,7 +86,7 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
         self.stop_event.set()
 
     async def run_until_handshake_complete(self):
-        async with serve(self.handler, "0.0.0.0", self._port):
+        async with serve(self.initial_handshake_handler, "0.0.0.0", self._port):
             await self.stop
 
     async def connect_to_server(self):
@@ -102,6 +103,57 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
         self._client.register_namespace(self)
 
         await self._client.connect(f'https://{self.initialization_data.ip}:{self.initialization_data.port}')
+
+    async def handle_pod_run_request(self, request: ExecutionRequest):
+        if not self._kube_handler.create_namespace(request.arguments['namespace']):
+            await self.emit('execute_response',
+                            ExecutionResponse(id=request.id, result=CommandResult.FAILURE,
+                                              description="Failed to create namespace").model_dump_json())
+            return
+
+        pod_name = self._kube_handler.run_pod(request.arguments['image_name'],
+                                              request.arguments['version'],
+                                              request.arguments['environment'],
+                                              request.arguments['namespace'])
+        if pod_name is None:
+            await self.emit('execute_response',
+                            ExecutionResponse(id=request.id, result=CommandResult.FAILURE,
+                                              description="Failed to create pod").model_dump_json())
+            return
+        await self.emit('execute_response',
+                        ExecutionResponse(id=request.id, result=CommandResult.SUCCESS,
+                                          description=pod_name).model_dump_json())
+
+    async def on_execute(self, data):
+        try:
+            data = json.loads(data)
+            execution_request = ExecutionRequest(**data)
+            if execution_request.command == CommandOptions.PRE_LOAD_IMAGE:
+                # TODO: add pre_load_option
+                pass
+            elif execution_request.command == CommandOptions.RUN_POD:
+                await self.handle_pod_run_request(execution_request)
+
+            elif execution_request.command == CommandOptions.DELETE_POD:
+                execution_result = self._kube_handler.delete_pod(execution_request.arguments['pod_name'],
+                                                                 execution_request.arguments['namespace'])
+                await self.emit('execute_response',
+                                ExecutionResponse(id=execution_request.id, result=execution_result,
+                                                  description='').model_dump_json())
+
+            elif execution_request.command == CommandOptions.DELETE_ALL_PODS:
+                execution_result = self._kube_handler.delete_all_pods_in_namespace(
+                    execution_request.arguments['namespace'])
+                await self.emit('execute_response',
+                                ExecutionResponse(id=execution_request.id, result=execution_result,
+                                                  description='').model_dump_json())
+            elif execution_request.command == CommandOptions.GET_POD_DETAILS:
+                pass
+
+        except JSONDecodeError as e:
+            raise Exception(f"Failed to decode json data: {data}")
+        except ValidationError as e:
+            raise Exception(f"Failed to parse verify data: {data}")
 
     def run(self):
         self.loop.run_until_complete(self.run_until_handshake_complete())

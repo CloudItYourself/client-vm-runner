@@ -1,8 +1,9 @@
 python-socketio
 jsonschema
-aioboto3
 websocket-client
 websockets
-psutil
-socketify
-pycryptodome
+uvicorn
+pydantic
+cryptography
+aiohttp
+kubernetes

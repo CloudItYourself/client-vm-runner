@@ -10,9 +10,14 @@ import kubernetes
 from kubernetes import client
 from kubernetes.client import ApiException
 
+from internal_controller.kubernetes_handling.kube_utility_installation_functions import install_k3s, \
+    install_kube_state_metrics
+
 
 class KubeHandler:
     POD_MAX_STARTUP_TIME_IN_MINUTES: Final[int] = 6
+    POD_DELETION_TIME_IN_MINUTES: Final[int] = 1
+
     LINUX_K3S_CONFIG_LOCATION: Final[str] = '/etc/rancher/k3s/k3s.yaml'
     WINDOWS_MINIKUBE_CONFIG_LOCATION: Final[str] = f"{os.environ['USERPROFILE']}\\.kube\\config"
     RELEVANT_CONFIG_FILE = LINUX_K3S_CONFIG_LOCATION if sys.platform == 'linux' else WINDOWS_MINIKUBE_CONFIG_LOCATION
@@ -33,15 +38,17 @@ class KubeHandler:
         return self._kube_ready
 
     @staticmethod
-    def _install_k3s() -> bool:
-        return os.system('curl -sfL https://get.k3s.io | sh - ') == 0 and os.system('kubectl --help') == 0
+    def _install_kube_env() -> bool:
+        return install_k3s() and \
+               install_kube_state_metrics() and \
+               os.system('kubectl --help') == 0
 
     def initialize(self):
         ret_code = os.system('kubectl --help')
         if ret_code == 0:
             self._kube_ready = True
         else:
-            self._kube_ready = KubeHandler._install_k3s()
+            self._kube_ready = KubeHandler._install_kube_env()
 
         if self._kube_ready:
             kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
@@ -49,18 +56,16 @@ class KubeHandler:
 
     def verify_pod_successful_startup(self, pod_name: str, namespace: str) -> bool:
         start_time = time.time()
-        while True:
+        while time.time() - start_time < KubeHandler.POD_MAX_STARTUP_TIME_IN_MINUTES * 60:
             try:
                 api_response = self._kube_client.read_namespaced_pod(pod_name, namespace=namespace)
                 if api_response.status.phase != 'Pending':
                     return api_response.status.phase == "Running"
-                current_time = time.time()
-                if current_time - start_time > KubeHandler.POD_MAX_STARTUP_TIME_IN_MINUTES * 60:
-                    return False
                 time.sleep(0.2)
             except ApiException as e:
                 logging.error(f"Exception when calling CoreV1Api->read_namespaced_pod: {e}")
                 return False
+        return False
 
     def run_pod(self, image_name: str, version: str, environment: Dict[str, str], namespace: str) -> Optional[str]:
         generated_image_name = f'{image_name}-{self.generate_random_string(10)}'
@@ -96,6 +101,10 @@ class KubeHandler:
 
     def create_namespace(self, namespace: str) -> bool:
         try:
+            namespaces = self._kube_client.list_namespace()
+            if namespace in [n.metadata.name for n in namespaces.items]:
+                return True
+
             api_response = self._kube_client.create_namespace(
                 client.V1Namespace(metadata=client.V1ObjectMeta(name=namespace)))
             return api_response.status == "Success"
@@ -105,16 +114,29 @@ class KubeHandler:
 
     def delete_pod(self, pod_name: str, namespace: str) -> bool:
         try:
-            api_response = self._kube_client.delete_namespaced_pod(pod_name, namespace)
-            return api_response.status == "Success"
+            self._kube_client.delete_namespaced_pod(pod_name, namespace)
+            start_time = time.time()
+            while time.time() - start_time < KubeHandler.POD_DELETION_TIME_IN_MINUTES * 60:
+                try:
+                    self._kube_client.read_namespaced_pod(pod_name, namespace)
+                    time.sleep(0.2)
+                except ApiException as e:
+                    return True
+            return False
         except ApiException as e:
             logging.error(f"Exception when calling CoreV1Api->delete_namespaced_pod: {e}")
             return False
 
     def delete_all_pods_in_namespace(self, namespace: str) -> bool:
         try:
-            api_response = self._kube_client.delete_collection_namespaced_pod(namespace)
-            return api_response.status == "Success"
+            self._kube_client.delete_collection_namespaced_pod(namespace)
+            start_time = time.time()
+            while time.time() - start_time < KubeHandler.POD_DELETION_TIME_IN_MINUTES * 60:
+                pods = self._kube_client.list_namespaced_pod(namespace)
+                if len(pods.items) == 0:
+                    return True
+                time.sleep(0.2)
+            return False
         except ApiException as e:
             logging.error(f"Exception when calling CoreV1Api->delete_collection_namespaced_pod: {e}")
             return False
@@ -132,9 +154,10 @@ class KubeHandler:
 if __name__ == '__main__':
     xd = KubeHandler()
     xd.initialize()
+    # xd.delete_pod('nginx-guveaaqtdz', 'tpc-workers')
     xd.delete_all_pods_in_namespace('tpc-workers')
     xd.create_namespace('tpc-workers')
-    xd.run_pod("nginx", "latest", {}, 'tpc-workers')
+    # xd.run_pod("nginx", "latest", {}, 'tpc-workers')
     ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
     for i in ret.items:
         print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
