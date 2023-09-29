@@ -10,8 +10,7 @@ import kubernetes
 from kubernetes import client
 from kubernetes.client import ApiException
 
-from internal_controller.kubernetes_handling.kube_utility_installation_functions import install_k3s, \
-    install_kube_state_metrics
+from internal_controller.kubernetes_handling.kube_utility_installation_functions import install_k3s
 
 
 class KubeHandler:
@@ -40,7 +39,6 @@ class KubeHandler:
     @staticmethod
     def _install_kube_env() -> bool:
         return install_k3s() and \
-               install_kube_state_metrics() and \
                os.system('kubectl --help') == 0
 
     def initialize(self):
