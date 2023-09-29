@@ -17,9 +17,8 @@ from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosed
 from websockets.server import serve
 
-from internal_controller.connection.schema import HandshakeResponse, HandshakeStatus
+from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeReceptionMessage
 from utilities.messages import ExecutionRequest, CommandOptions, ExecutionResponse, CommandResult
-from worker_manager.vm_manager.schema import HandshakeReceptionMessage
 
 
 class ConnectionHandler(socketio.AsyncClientNamespace):

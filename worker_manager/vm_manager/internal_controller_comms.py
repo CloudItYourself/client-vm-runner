@@ -10,11 +10,10 @@ from aiohttp import web
 from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosedOK
 
-from internal_controller.connection.schema import HandshakeResponse, HandshakeStatus
+from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeReceptionMessage
 from utilities.certificates import generate_self_signed_cert
 from utilities.sockets import get_available_port, get_ethernet_ip
 from worker_manager.vm_manager.qemu_initializer import QemuInitializer
-from worker_manager.vm_manager.schema import HandshakeReceptionMessage
 import socketio
 
 

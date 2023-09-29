@@ -27,3 +27,20 @@ class ExecutionResponse(BaseModel):
     id: str
     result: CommandResult
     description: str
+
+
+class HandshakeReceptionMessage(BaseModel):
+    ip: str
+    port: int
+    secret_key: bytes
+
+
+class HandshakeStatus(Enum):
+    SUCCESS = 0
+    INITIALIZING = 1
+    FAILURE = 2
+
+
+class HandshakeResponse(BaseModel):
+    STATUS: HandshakeStatus
+    DESCRIPTION: str
