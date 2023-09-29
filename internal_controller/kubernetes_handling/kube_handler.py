@@ -77,6 +77,7 @@ class KubeHandler:
         )
 
         pod_spec = client.V1PodSpec(
+            restart_policy='Never',
             containers=[container]
         )
 
@@ -157,7 +158,7 @@ if __name__ == '__main__':
     # xd.delete_pod('nginx-guveaaqtdz', 'tpc-workers')
     xd.delete_all_pods_in_namespace('tpc-workers')
     xd.create_namespace('tpc-workers')
-    # xd.run_pod("nginx", "latest", {}, 'tpc-workers')
+    xd.run_pod("nginxss", "latest", {}, 'tpc-workers')
     ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
     for i in ret.items:
         print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
