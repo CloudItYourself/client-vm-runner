@@ -147,7 +147,11 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
                                 ExecutionResponse(id=execution_request.id, result=execution_result,
                                                   description='').model_dump_json())
             elif execution_request.command == CommandOptions.GET_POD_DETAILS:
-                pass
+                execution_result = self._kube_handler.get_namespace_details(execution_request.arguments['namespace'])
+                command_result = CommandResult.SUCCESS if execution_result is not None else CommandResult.FAILURE
+                await self.emit('execute_response',
+                                ExecutionResponse(id=execution_request.id, result=command_result, description='',
+                                                  extra=execution_result).model_dump_json())
 
         except JSONDecodeError as e:
             raise Exception(f"Failed to decode json data: {data}")

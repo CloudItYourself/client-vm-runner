@@ -11,6 +11,7 @@ from kubernetes import client
 from kubernetes.client import ApiException
 
 from internal_controller.kubernetes_handling.kube_utility_installation_functions import install_k3s
+from utilities.messages import PodDetails, NamespaceDetails
 
 
 class KubeHandler:
@@ -140,14 +141,22 @@ class KubeHandler:
             logging.error(f"Exception when calling CoreV1Api->delete_collection_namespaced_pod: {e}")
             return False
 
-    def get_pod_details(self, pod_name: str, namespace: str):
-        # TODO check all the return values, they do not match
-        # TODO ADD PROMEHEUS
+    def get_namespace_details(self, namespace: str):
         try:
-            api_response = self._kube_client.read_namespaced_pod(pod_name, namespace)
-            return api_response
+            namespace_item_details = []
+            custom_object_api = client.CustomObjectsApi()
+            resp = custom_object_api.list_cluster_custom_object('metrics.k8s.io', 'v1beta1', 'pods')
+            for item in resp['items']:
+                if item['metadata']['namespace'] == namespace:
+                    current_metrics = PodDetails(pod_name=item['metadata']['name'],
+                                                 cpu_utilization=item['containers'][0]['usage']['cpu'],
+                                                 memory_utilization=item['containers'][0]['usage']['memory'],
+                                                 measurement_window=item['window'])
+                    namespace_item_details.append(current_metrics)
+            return NamespaceDetails(pod_details=namespace_item_details)
         except ApiException as e:
             logging.error(f"Exception when calling CoreV1Api->read_namespaced_pod: {e}")
+            return None
 
 
 if __name__ == '__main__':
@@ -156,7 +165,8 @@ if __name__ == '__main__':
     # xd.delete_pod('nginx-guveaaqtdz', 'tpc-workers')
     xd.delete_all_pods_in_namespace('tpc-workers')
     xd.create_namespace('tpc-workers')
-    xd.run_pod("nginxss", "latest", {}, 'tpc-workers')
+    # xd.run_pod("nginxss", "latest", {}, 'tpc-workers')
+    xd.get_namespace_details('s')
     ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
     for i in ret.items:
         print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))

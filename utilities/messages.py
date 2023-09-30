@@ -1,6 +1,6 @@
 from enum import Enum
 from plistlib import Dict
-from typing import Union
+from typing import Union, List, Any
 from pydantic import BaseModel
 
 
@@ -27,6 +27,7 @@ class ExecutionResponse(BaseModel):
     id: str
     result: CommandResult
     description: str
+    extra: Any
 
 
 class HandshakeReceptionMessage(BaseModel):
@@ -44,3 +45,14 @@ class HandshakeStatus(Enum):
 class HandshakeResponse(BaseModel):
     STATUS: HandshakeStatus
     DESCRIPTION: str
+
+
+class PodDetails(BaseModel):
+    pod_name: str
+    cpu_utilization: float
+    memory_utilization: float
+    measurement_window: float
+
+
+class NamespaceDetails(BaseModel):
+    pod_details: List[PodDetails]
