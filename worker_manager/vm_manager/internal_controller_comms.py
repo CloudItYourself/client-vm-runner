@@ -4,46 +4,48 @@ import logging
 import pathlib
 import ssl
 import tempfile
-from typing import Final, Dict, Optional
+from typing import Final, Optional, Any
 import websockets
-from aiohttp import web
 from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosedOK
 
-from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeReceptionMessage
+from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeReceptionMessage, ExecutionResponse, \
+    ExecutionRequest
 from utilities.certificates import generate_self_signed_cert
 from utilities.sockets import get_available_port, get_ethernet_ip
+from utilities.websocket_server import WebSocketSubscriber, WebSocketServer
 from worker_manager.vm_manager.qemu_initializer import QemuInitializer
-import socketio
 
 
-class InternalControllerComms(socketio.AsyncNamespace):
+class InternalControllerComms(WebSocketSubscriber):
     TIMEOUT_RETRY_COUNT: Final[int] = 10
     TIMEOUT_BETWEEN_RUNS: Final[int] = 10
     VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC: Final[int] = 2
     INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 20
     HELLO_MSG_TIMEOUT_SECS: Final[int] = 5
-    NAMESPACE: Final[str] = '/vm_connection'
+    CONNECTION_PATH: Final[str] = '/vm_connection'
 
     def __init__(self, core_count: int, memory_size: int,
                  image_location=pathlib.Path(r"E:\FreeCloudProject\worker_manager\image_builder\staging\linux.img")):
-        super().__init__(InternalControllerComms.NAMESPACE)
-
         self._qemu_initializer = QemuInitializer(core_count, memory_size, image_location)
         self._server_ip = get_ethernet_ip()
         self._server_port = get_available_port()
         self._cert, self._private_key = generate_self_signed_cert(self._server_ip, self._server_ip)
 
         self.loop = asyncio.get_event_loop()
-        self.loop.create_task(self.run_server_in_background())
+        self._server = self.run_server_in_background()
+        self._server.subscribe(InternalControllerComms.CONNECTION_PATH, self)
 
         self._vm_ready = False
         self._vm_connected = False
 
         self._vm_port = get_available_port()
+        #self._vm_port = 39019
         self._qemu_initializer.run_vm(self._vm_port)
         self.loop.run_until_complete(self.wait_for_vm_connection())
         self._current_vm_sid: Optional[str] = None
+
+        self._current_job_id = 0
 
     async def wait_for_initial_connection(self):
         exception = None
@@ -96,20 +98,20 @@ class InternalControllerComms(socketio.AsyncNamespace):
             if connection is not None:
                 await connection.close()
 
-    async def on_connect(self, sid: str, environ: Dict[str, str]):
+    async def handle_connect(self, sid: str):
         if self._vm_connected and self._vm_ready:
-            await self.disconnect(sid)
+            await self._server.force_disconnect(sid)
         else:
             logging.info("Vm connected")
             self._current_vm_sid = sid
             self._vm_connected = True
 
-    async def on_disconnect(self, sid: str):
+    async def handle_disconnect(self, sid: str):
         if self._vm_connected and sid == self._current_vm_sid:
             self._vm_connected = False
             logging.info("Vm disconnected")
 
-    async def run_server_in_background(self):
+    def run_server_in_background(self):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_context.load_default_certs()
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -120,14 +122,11 @@ class InternalControllerComms(socketio.AsyncNamespace):
 
             ssl_context.load_cert_chain(certfile=cert_file.absolute(), keyfile=key_file.absolute())
 
-        sio = socketio.AsyncServer(async_mode='aiohttp', logger=True, engineio_logger=True)
-        sio.register_namespace(self)
-        app = web.Application()
-        sio.attach(app)
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, host=self._server_ip, port=self._server_port, ssl_context=ssl_context)
-        await site.start()
+        return WebSocketServer(self._server_ip, self._server_port, ssl_context=ssl_context)
+
+    async def send_request(self, request: ExecutionRequest):
+        request.id = self._current_job_id
+        return await self._server.send_message(self._current_vm_sid, request.model_dump_json(), wait_for_response=True)
 
 
 if __name__ == '__main__':

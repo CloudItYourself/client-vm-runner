@@ -5,14 +5,15 @@ import pathlib
 import ssl
 import tempfile
 import threading
+
+import websockets
+
 from internal_controller.kubernetes_handling.kube_handler import KubeHandler
 
 from concurrent.futures import ProcessPoolExecutor
 from json import JSONDecodeError
 from typing import Final
 
-import aiohttp
-import socketio
 from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosed
 from websockets.server import serve
@@ -21,12 +22,10 @@ from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeRece
 from utilities.messages import ExecutionRequest, CommandOptions, ExecutionResponse, CommandResult
 
 
-class ConnectionHandler(socketio.AsyncClientNamespace):
-    NAMESPACE: Final[str] = '/vm_connection'
+class ConnectionHandler:
+    CONNECTION_PATH: Final[str] = 'vm_connection'
 
     def __init__(self, port: int):
-        super().__init__(ConnectionHandler.NAMESPACE)
-
         self.stop_event = threading.Event()
         self.loop = asyncio.get_event_loop()
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
@@ -95,19 +94,14 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
             cert_file = (pathlib.Path(tmpdir) / 'cert.pem')
             cert_file.write_bytes(self.initialization_data.secret_key)
             ssl_context.load_verify_locations(cert_file.absolute())
-
-        connector = aiohttp.TCPConnector(ssl=ssl_context)
-        http_session = aiohttp.ClientSession(connector=connector)
-        self._client = socketio.AsyncClient(http_session=http_session)
-        self._client.register_namespace(self)
-
-        await self._client.connect(f'https://{self.initialization_data.ip}:{self.initialization_data.port}')
+        self._client = await websockets.connect(
+            f"wss://{self._initialization_data.ip}:{self._initialization_data.port}/{ConnectionHandler.CONNECTION_PATH}",
+            ssl=ssl_context)
 
     async def handle_pod_run_request(self, request: ExecutionRequest):
         if not self._kube_handler.create_namespace(request.arguments['namespace']):
-            await self.emit('execute_response',
-                            ExecutionResponse(id=request.id, result=CommandResult.FAILURE,
-                                              description="Failed to create namespace").model_dump_json())
+            await self._client.send(ExecutionResponse(id=request.id, result=CommandResult.FAILURE,
+                                                      description="Failed to create namespace").model_dump_json())
             return
 
         pod_name = self._kube_handler.run_pod(request.arguments['image_name'],
@@ -115,15 +109,13 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
                                               request.arguments['environment'],
                                               request.arguments['namespace'])
         if pod_name is None:
-            await self.emit('execute_response',
-                            ExecutionResponse(id=request.id, result=CommandResult.FAILURE,
-                                              description="Failed to create pod").model_dump_json())
+            await self._client.send(ExecutionResponse(id=request.id, result=CommandResult.FAILURE,
+                                                      description="Failed to create pod").model_dump_json())
             return
-        await self.emit('execute_response',
-                        ExecutionResponse(id=request.id, result=CommandResult.SUCCESS,
-                                          description=pod_name).model_dump_json())
+        await self._client.send(ExecutionResponse(id=request.id, result=CommandResult.SUCCESS,
+                                                  description=pod_name).model_dump_json())
 
-    async def on_execute(self, data):
+    async def handle_data(self, data):
         try:
             data = json.loads(data)
             execution_request = ExecutionRequest(**data)
@@ -136,22 +128,20 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
             elif execution_request.command == CommandOptions.DELETE_POD:
                 execution_result = self._kube_handler.delete_pod(execution_request.arguments['pod_name'],
                                                                  execution_request.arguments['namespace'])
-                await self.emit('execute_response',
-                                ExecutionResponse(id=execution_request.id, result=execution_result,
-                                                  description='').model_dump_json())
+                await self._client.send(ExecutionResponse(id=execution_request.id, result=execution_result,
+                                                          description='').model_dump_json())
 
             elif execution_request.command == CommandOptions.DELETE_ALL_PODS:
                 execution_result = self._kube_handler.delete_all_pods_in_namespace(
                     execution_request.arguments['namespace'])
-                await self.emit('execute_response',
-                                ExecutionResponse(id=execution_request.id, result=execution_result,
-                                                  description='').model_dump_json())
+                await self._client.send(ExecutionResponse(id=execution_request.id, result=execution_result,
+                                                          description='').model_dump_json())
             elif execution_request.command == CommandOptions.GET_POD_DETAILS:
                 execution_result = self._kube_handler.get_namespace_details(execution_request.arguments['namespace'])
                 command_result = CommandResult.SUCCESS if execution_result is not None else CommandResult.FAILURE
-                await self.emit('execute_response',
-                                ExecutionResponse(id=execution_request.id, result=command_result, description='',
-                                                  extra=execution_result).model_dump_json())
+                await self._client.send(
+                    ExecutionResponse(id=execution_request.id, result=command_result, description='',
+                                      extra=execution_result).model_dump_json())
 
         except JSONDecodeError as e:
             raise Exception(f"Failed to decode json data: {data}")
@@ -164,4 +154,5 @@ class ConnectionHandler(socketio.AsyncClientNamespace):
         print("Connection accepted")
 
         while True:
-            self.loop.run_until_complete(asyncio.sleep(1))
+            data = self.loop.run_until_complete(self._client.recv())
+            self.loop.run_until_complete(self.handle_data(data))

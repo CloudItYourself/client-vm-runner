@@ -1,6 +1,5 @@
 from enum import Enum
-from plistlib import Dict
-from typing import Union, List, Any
+from typing import Union, List, Any, Dict
 from pydantic import BaseModel
 
 
@@ -18,13 +17,13 @@ class CommandResult(Enum):
 
 
 class ExecutionRequest(BaseModel):
-    id: str
+    id: int
     command: CommandOptions
     arguments: Dict[str, Union[Dict[str, str], str]]
 
 
 class ExecutionResponse(BaseModel):
-    id: str
+    id: int
     result: CommandResult
     description: str
     extra: Any

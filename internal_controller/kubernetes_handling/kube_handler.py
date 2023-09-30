@@ -17,10 +17,7 @@ from utilities.messages import PodDetails, NamespaceDetails
 class KubeHandler:
     POD_MAX_STARTUP_TIME_IN_MINUTES: Final[int] = 6
     POD_DELETION_TIME_IN_MINUTES: Final[int] = 1
-
-    LINUX_K3S_CONFIG_LOCATION: Final[str] = '/etc/rancher/k3s/k3s.yaml'
-    WINDOWS_MINIKUBE_CONFIG_LOCATION: Final[str] = f"{os.environ['USERPROFILE']}\\.kube\\config"
-    RELEVANT_CONFIG_FILE = LINUX_K3S_CONFIG_LOCATION if sys.platform == 'linux' else WINDOWS_MINIKUBE_CONFIG_LOCATION
+    RELEVANT_CONFIG_FILE = '/etc/rancher/k3s/k3s.yaml' if sys.platform == 'linux' else f"{os.environ['USERPROFILE']}\\.kube\\config"
 
     def __init__(self):
         self._kube_ready = False
