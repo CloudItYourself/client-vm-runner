@@ -21,7 +21,7 @@ class InternalControllerComms(WebSocketSubscriber):
     TIMEOUT_RETRY_COUNT: Final[int] = 10
     TIMEOUT_BETWEEN_RUNS: Final[int] = 10
     VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC: Final[int] = 2
-    INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 90
+    INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 180
     HELLO_MSG_TIMEOUT_SECS: Final[int] = 5
     CONNECTION_PATH: Final[str] = '/vm_connection'
 
@@ -44,8 +44,13 @@ class InternalControllerComms(WebSocketSubscriber):
         self._qemu_initializer.run_vm(self._vm_port)
         self.loop.run_until_complete(self.wait_for_vm_connection())
         self._current_vm_sid: Optional[str] = None
-
+        self._lock = asyncio.Lock()
         self._current_job_id = 0
+        self._should_terminate = False
+
+    @property
+    def should_terminate(self):
+        return self._should_terminate
 
     async def wait_for_initial_connection(self):
         exception = None
@@ -110,6 +115,7 @@ class InternalControllerComms(WebSocketSubscriber):
         if self._vm_connected and sid == self._current_vm_sid:
             self._vm_connected = False
             logging.info("Vm disconnected")
+            self._should_terminate = True
 
     def run_server_in_background(self):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -125,8 +131,9 @@ class InternalControllerComms(WebSocketSubscriber):
         return WebSocketServer(self._server_ip, self._server_port, ssl_context=ssl_context)
 
     async def send_request(self, request: ExecutionRequest):
-        request.id = self._current_job_id
-        return await self._server.send_message(self._current_vm_sid, request.model_dump_json(), wait_for_response=True)
+        async with self._lock:
+            return await self._server.send_message(self._current_vm_sid, request.model_dump_json(),
+                                                   wait_for_response=True)
 
 
 if __name__ == '__main__':

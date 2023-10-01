@@ -1,10 +1,11 @@
+
 import psutil
 import logging
 import socketio
-from typing import Final, Dict
+from typing import Final, Dict, List
 from asyncio import sleep as aiosleep
 
-from utilities.messages import ExecutionResponse, ExecutionRequest, CommandOptions
+from utilities.messages import ExecutionResponse, ExecutionRequest, CommandOptions, NamespaceDetails
 from worker_manager import LOGGER_NAME
 from worker_manager.monitoring.messages import WorkerMetrics
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms
@@ -20,6 +21,11 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
         self._logger = logging.getLogger(LOGGER_NAME)
         self._internal_comms_handler = internal_comms_handler
         self._request_id_to_execution_response: Dict[int, ExecutionResponse] = {}
+        self._should_terminate = False
+
+    @property
+    def should_terminate(self):
+        return self._should_terminate
 
     async def send_metrics_report(self) -> None:
         cpu_stats = psutil.cpu_percent(interval=WorkerManagersConnectionHandler.INTERVAL_BETWEEN_METRICS_IN_SEC)
@@ -41,8 +47,13 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
     def handle_callback(self, request_id: int, response: ExecutionResponse):
         self._request_id_to_execution_response[request_id] = response
 
+    async def on_disconnect(self):
+        self._should_terminate = True
+
     @staticmethod
     async def background_task(managers_connection_handler: 'WorkerManagersConnectionHandler'):
         while True:
             await managers_connection_handler.send_metrics_report()
             await aiosleep(managers_connection_handler.INTERVAL_BETWEEN_METRICS_IN_SEC)
+
+

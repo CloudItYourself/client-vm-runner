@@ -10,7 +10,7 @@ import websockets
 
 from internal_controller.kubernetes_handling.kube_handler import KubeHandler
 
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from json import JSONDecodeError
 from typing import Final
 
@@ -61,7 +61,8 @@ class ConnectionHandler:
                     await self.close_comms(websocket)
                     raise Exception(err_msg)
                 else:
-                    self._kube_handler.initialize(perform_check=False)
+                    await self.loop.run_in_executor(ThreadPoolExecutor(), ConnectionHandler.prepare_kube,
+                                                    self._kube_handler)
 
                 self._initialization_data = response
                 await websocket.send(
