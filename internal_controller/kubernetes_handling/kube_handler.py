@@ -162,8 +162,9 @@ class KubeHandler:
             if event['type'] == 'ADDED' and 'metrics-server' in event['object'].metadata.name and \
                     event['raw_object']['status']['phase'] == 'Running' and \
                     event['raw_object']['status']['containerStatuses'][0]['ready'] is True:
+                event_watch.stop()
                 return True
-
+        event_watch.stop()
         return False
 
 
