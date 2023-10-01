@@ -21,7 +21,7 @@ class InternalControllerComms(WebSocketSubscriber):
     TIMEOUT_RETRY_COUNT: Final[int] = 10
     TIMEOUT_BETWEEN_RUNS: Final[int] = 10
     VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC: Final[int] = 2
-    INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 20
+    INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 90
     HELLO_MSG_TIMEOUT_SECS: Final[int] = 5
     CONNECTION_PATH: Final[str] = '/vm_connection'
 
@@ -72,7 +72,7 @@ class InternalControllerComms(WebSocketSubscriber):
             while not connection_complete:
                 if first_msg:
                     raw_data = await asyncio.wait_for(connection.recv(),
-                                                      InternalControllerComms.VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC)
+                                                      InternalControllerComms.INITIAL_RESPONSE_TIMEOUT_SECS)
                     first_msg = False
                 else:
                     raw_data = await connection.recv()

@@ -60,6 +60,8 @@ class ConnectionHandler:
                         HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg).model_dump_json())
                     await self.close_comms(websocket)
                     raise Exception(err_msg)
+                else:
+                    self._kube_handler.initialize(perform_check=False)
 
                 self._initialization_data = response
                 await websocket.send(

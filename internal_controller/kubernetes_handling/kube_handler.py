@@ -40,11 +40,13 @@ class KubeHandler:
         return install_k3s() and \
                os.system('kubectl --help') == 0
 
-    def initialize(self):
-        kube_installed = os.system('kubectl --help') == 0
-        if kube_installed is False:
-            kube_installed = KubeHandler._install_kube_env()
-
+    def initialize(self, perform_check: bool = True):
+        if perform_check:
+            kube_installed = os.system('kubectl --help') == 0
+            if kube_installed is False:
+                kube_installed = KubeHandler._install_kube_env()
+        else:
+            kube_installed = True
         if kube_installed:
             kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
             self._kube_client = kubernetes.client.CoreV1Api()
@@ -157,14 +159,25 @@ class KubeHandler:
 
     def wait_for_metrics_server_to_start(self):
         event_watch = watch.Watch()
+        metrics_started = False
         for event in event_watch.stream(func=self._kube_client.list_namespaced_pod, namespace='kube-system',
                                         timeout_seconds=KubeHandler.K3S_MAX_STARTUP_TIME_IN_SECONDS):
             if event['type'] == 'ADDED' and 'metrics-server' in event['object'].metadata.name and \
                     event['raw_object']['status']['phase'] == 'Running' and \
                     event['raw_object']['status']['containerStatuses'][0]['ready'] is True:
                 event_watch.stop()
-                return True
+                metrics_started = True
         event_watch.stop()
+
+        if metrics_started:
+            start = time.time()
+            while time.time() - start < KubeHandler.K3S_MAX_STARTUP_TIME_IN_SECONDS * 5:
+                try:
+                    self.get_namespace_details('kube-system')
+                    return True
+                except Exception as e:
+                    pass
+                time.sleep(0.2)
         return False
 
 
