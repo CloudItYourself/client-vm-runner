@@ -11,7 +11,7 @@ from worker_manager.vm_manager.internal_controller_comms import InternalControll
 
 
 class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
-    NAMESPACE: Final[str] = '/worker_managers'
+    NAMESPACE: Final[str] = '/worker_managers_metrics'
     INTERNAL_WORKER_NAMESPACE: Final[str] = 'tpc-workers'
     INTERVAL_BETWEEN_METRICS_IN_SEC: Final[int] = 1
 

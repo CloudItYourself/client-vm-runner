@@ -7,7 +7,7 @@ import time
 from typing import Final, Dict, Optional
 
 import kubernetes
-from kubernetes import client
+from kubernetes import client, watch
 from kubernetes.client import ApiException
 
 from internal_controller.kubernetes_handling.kube_utility_installation_functions import install_k3s
@@ -17,6 +17,7 @@ from utilities.messages import PodDetails, NamespaceDetails
 class KubeHandler:
     POD_MAX_STARTUP_TIME_IN_MINUTES: Final[int] = 6
     POD_DELETION_TIME_IN_MINUTES: Final[int] = 1
+    K3S_MAX_STARTUP_TIME_IN_SECONDS: Final[int] = 120
     RELEVANT_CONFIG_FILE = '/etc/rancher/k3s/k3s.yaml' if sys.platform == 'linux' else f"{os.environ['USERPROFILE']}\\.kube\\config"
 
     def __init__(self):
@@ -40,15 +41,14 @@ class KubeHandler:
                os.system('kubectl --help') == 0
 
     def initialize(self):
-        ret_code = os.system('kubectl --help')
-        if ret_code == 0:
-            self._kube_ready = True
-        else:
-            self._kube_ready = KubeHandler._install_kube_env()
+        kube_installed = os.system('kubectl --help') == 0
+        if kube_installed is False:
+            kube_installed = KubeHandler._install_kube_env()
 
-        if self._kube_ready:
+        if kube_installed:
             kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
             self._kube_client = kubernetes.client.CoreV1Api()
+            self._kube_ready = self.wait_for_metrics_server_to_start()
 
     def verify_pod_successful_startup(self, pod_name: str, namespace: str) -> bool:
         start_time = time.time()
@@ -152,18 +152,29 @@ class KubeHandler:
                     namespace_item_details.append(current_metrics)
             return NamespaceDetails(pod_details=namespace_item_details)
         except ApiException as e:
-            logging.error(f"Exception when calling CoreV1Api->read_namespaced_pod: {e}")
+            logging.error(f"Exception when calling CoreV1Api->list_cluster_custom_object: {e}")
             return None
+
+    def wait_for_metrics_server_to_start(self):
+        event_watch = watch.Watch()
+        for event in event_watch.stream(func=self._kube_client.list_namespaced_pod, namespace='kube-system',
+                                        timeout_seconds=KubeHandler.K3S_MAX_STARTUP_TIME_IN_SECONDS):
+            if event['type'] == 'ADDED' and 'metrics-server' in event['object'].metadata.name and \
+                    event['raw_object']['status']['phase'] == 'Running' and \
+                    event['raw_object']['status']['containerStatuses'][0]['ready'] is True:
+                return True
+
+        return False
 
 
 if __name__ == '__main__':
     xd = KubeHandler()
     xd.initialize()
     # xd.delete_pod('nginx-guveaaqtdz', 'tpc-workers')
-    xd.delete_all_pods_in_namespace('tpc-workers')
+    # xd.delete_all_pods_in_namespace('tpc-workers')
     xd.create_namespace('tpc-workers')
     # xd.run_pod("nginxss", "latest", {}, 'tpc-workers')
-    xd.get_namespace_details('s')
-    ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
-    for i in ret.items:
-        print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
+    print(xd.get_namespace_details('kube-system'))
+    # ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
+    # for i in ret.items:
+    #     print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))

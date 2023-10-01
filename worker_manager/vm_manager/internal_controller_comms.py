@@ -4,7 +4,7 @@ import logging
 import pathlib
 import ssl
 import tempfile
-from typing import Final, Optional, Any
+from typing import Final, Optional
 import websockets
 from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosedOK
@@ -40,7 +40,7 @@ class InternalControllerComms(WebSocketSubscriber):
         self._vm_connected = False
 
         self._vm_port = get_available_port()
-        #self._vm_port = 39019
+        # self._vm_port = 39019
         self._qemu_initializer.run_vm(self._vm_port)
         self.loop.run_until_complete(self.wait_for_vm_connection())
         self._current_vm_sid: Optional[str] = None
@@ -130,7 +130,11 @@ class InternalControllerComms(WebSocketSubscriber):
 
 
 if __name__ == '__main__':
+    from utilities.messages import CommandOptions
+
     xd = InternalControllerComms(core_count=4, memory_size=4000)
     while True:
         asyncio.get_event_loop().run_until_complete(asyncio.sleep(5))
+        print(asyncio.get_event_loop().run_until_complete(xd.send_request(
+            ExecutionRequest(id=0, command=CommandOptions.GET_POD_DETAILS, arguments={'namespace': 'kube-system'}))))
         print(xd._vm_connected)

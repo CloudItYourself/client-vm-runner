@@ -48,9 +48,9 @@ class HandshakeResponse(BaseModel):
 
 class PodDetails(BaseModel):
     pod_name: str
-    cpu_utilization: float
-    memory_utilization: float
-    measurement_window: float
+    cpu_utilization: str
+    memory_utilization: str
+    measurement_window: str
 
 
 class NamespaceDetails(BaseModel):
