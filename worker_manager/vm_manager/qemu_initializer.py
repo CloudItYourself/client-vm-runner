@@ -15,7 +15,6 @@ class QemuInitializer:
         self._memory_size = memory_size
         self._vm_subprocess = None
         self._ps_process = None
-        self._total_cpu_count = psutil.cpu_count()
 
     def run_vm(self, forwarding_port: int):
         command = QemuInitializer.QEMU_COMMAND.format(qemu_installation_location=self._qemu_installation_location,
@@ -26,7 +25,7 @@ class QemuInitializer:
         self._ps_process = psutil.Process(self._vm_subprocess.pid)
 
     def get_vm_utilization(self, interval: int) -> Tuple[float, float, float, float]:
-        cpu_stats = self._ps_process.cpu_percent(interval=interval) / self._total_cpu_count
+        cpu_stats = self._ps_process.cpu_percent(interval=interval) / 100
         memory_stats = self._ps_process.memory_info().rss / (1024 * 1024)
         return cpu_stats, self._core_count, memory_stats, self._memory_size
 
