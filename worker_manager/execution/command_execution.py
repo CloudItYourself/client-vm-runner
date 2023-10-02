@@ -1,7 +1,7 @@
 import json
 from json import JSONDecodeError
 from typing import Final
-
+from asyncio import Lock
 import websockets
 from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosed, WebSocketException
@@ -21,16 +21,23 @@ class CommandExecution:
         self._client = None
         self._internal_comm_handler = internal_comm_handler
         self._unique_id = unique_id
+        self._connection_lock = Lock()
+        self._connected = False
 
     async def wait_for_connection(self) -> None:
-        while True:
-            try:
-                self._client = await websockets.connect(
-                    f"ws://{self._server_ip}:{self._server_port}/{CommandExecution.EXECUTION_PATH}")
-                await self._client.send(WorkerDiscoveryMessage(worker_id=self._unique_id).model_dump_json())
+        async with self._connection_lock:
+            if self._connected:
                 return
-            except WebSocketException as e:
-                pass
+
+            while True:
+                try:
+                    self._client = await websockets.connect(
+                        f"ws://{self._server_ip}:{self._server_port}/{CommandExecution.EXECUTION_PATH}")
+                    await self._client.send(WorkerDiscoveryMessage(worker_id=self._unique_id).model_dump_json())
+                    self._connected = True
+                    return
+                except WebSocketException as e:
+                    pass
 
     async def process_command(self) -> None:
         try:
@@ -47,6 +54,7 @@ class CommandExecution:
                 ExecutionResponse(id=-1, result=CommandResult.FAILURE, description=f'Request validation error: {e}',
                                   extra={}).model_dump_json())
         except WebSocketException:
+            self._connected = False
             await self.wait_for_connection()
 
     @staticmethod
