@@ -59,10 +59,10 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
     async def send_metrics_report(self) -> None:
         cpu_stats = psutil.cpu_percent(interval=WorkerManagersConnectionHandler.INTERVAL_BETWEEN_METRICS_IN_SEC)
         memory_stats = psutil.virtual_memory()
-        current_metrics = WorkerMetrics(cpu_utilization=cpu_stats, memory_used=memory_stats.used,
-                                        memory_available=memory_stats.available, container_metrics=list())
+        current_metrics = WorkerMetrics(total_cpu_utilization=cpu_stats, total_memory_used=memory_stats.used,
+                                        total_memory_available=memory_stats.available, container_metrics=list())
         await self.get_kube_metrics(current_metrics)
-        await self.emit('metrics_report_result', current_metrics)
+        await self.emit('metrics_report_result', current_metrics.model_dump_json())
 
     async def on_metrics_report(self, _) -> None:
         await self.send_metrics_report()
