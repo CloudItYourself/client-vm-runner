@@ -1,10 +1,6 @@
 from subprocess import Popen, PIPE
 from typing import Tuple
-
 import psutil
-
-from worker_manager.monitoring.messages import WorkerMetrics
-
 
 class QemuInitializer:
     USER: str = 'root'
