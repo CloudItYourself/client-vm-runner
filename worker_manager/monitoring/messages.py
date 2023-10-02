@@ -14,3 +14,7 @@ class WorkerMetrics(BaseModel):
     total_memory_used: float
     total_memory_available: float
     container_metrics: List[ContainerMetrics]
+
+
+class WorkerDiscoveryMessage(BaseModel):
+    worker_id: str

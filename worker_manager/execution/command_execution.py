@@ -7,22 +7,26 @@ from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosed
 
 from utilities.messages import ExecutionRequest, ExecutionResponse, CommandResult
+from worker_manager.monitoring.messages import WorkerDiscoveryMessage
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms
 
 
 class CommandExecution:
     EXECUTION_PATH: Final[str] = 'worker_execution'
 
-    def __init__(self, server_ip: str, server_port: int, internal_comm_handler: InternalControllerComms):
+    def __init__(self, server_ip: str, server_port: int, internal_comm_handler: InternalControllerComms,
+                 unique_id: str):
         self._server_ip = server_ip
         self._server_port = server_port
         self._client = None
         self._internal_comm_handler = internal_comm_handler
         self._should_terminate = False
+        self._unique_id = unique_id
 
     async def initialize(self):
         self._client = await websockets.connect(
             f"ws://{self._server_ip}:{self._server_port}/{CommandExecution.EXECUTION_PATH}")
+        await self._client.send(WorkerDiscoveryMessage(worker_id=self._unique_id).model_dump_json())
 
     @property
     def should_terminate(self):

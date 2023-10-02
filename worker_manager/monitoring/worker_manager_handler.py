@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from utilities.messages import ExecutionResponse, ExecutionRequest, CommandOptions, NamespaceDetails, CommandResult
 from worker_manager import LOGGER_NAME
-from worker_manager.monitoring.messages import WorkerMetrics, ContainerMetrics
+from worker_manager.monitoring.messages import WorkerMetrics, ContainerMetrics, WorkerDiscoveryMessage
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms
 
 
@@ -21,12 +21,13 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
     INTERNAL_WORKER_NAMESPACE: Final[str] = 'tpc-workers'
     INTERVAL_BETWEEN_METRICS_IN_SEC: Final[int] = 1
 
-    def __init__(self, internal_comms_handler: InternalControllerComms):
+    def __init__(self, internal_comms_handler: InternalControllerComms, unique_id: str):
         super().__init__(WorkerManagersConnectionHandler.NAMESPACE)
         self._logger = logging.getLogger(LOGGER_NAME)
         self._internal_comms_handler = internal_comms_handler
         self._request_id_to_execution_response: Dict[int, ExecutionResponse] = {}
         self._should_terminate = False
+        self._unique_id = unique_id
 
     @property
     def should_terminate(self):
@@ -71,6 +72,9 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
 
     def handle_callback(self, request_id: int, response: ExecutionResponse):
         self._request_id_to_execution_response[request_id] = response
+
+    async def on_connect(self):
+        await self.emit('initialization_msg', WorkerDiscoveryMessage(worker_id=self._unique_id).model_dump_json())
 
     async def on_disconnect(self):
         self._should_terminate = True
