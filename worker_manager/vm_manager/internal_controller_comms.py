@@ -26,8 +26,8 @@ class InternalControllerComms(WebSocketSubscriber):
     CONNECTION_PATH: Final[str] = '/vm_connection'
 
     def __init__(self, core_count: int, memory_size: int,
-                 image_location=pathlib.Path(r"E:\FreeCloudProject\worker_manager\image_builder\staging\linux.img")):
-        self._qemu_initializer = QemuInitializer(core_count, memory_size, image_location)
+                 image_location: str, qemu_installation_location: str):
+        self._qemu_initializer = QemuInitializer(core_count, memory_size, image_location, qemu_installation_location)
         self._server_ip = get_ethernet_ip()
         self._server_port = get_available_port()
         self._cert, self._private_key = generate_self_signed_cert(self._server_ip, self._server_ip)
@@ -135,13 +135,5 @@ class InternalControllerComms(WebSocketSubscriber):
             return await self._server.send_message(self._current_vm_sid, request.model_dump_json(),
                                                    wait_for_response=True)
 
-
-if __name__ == '__main__':
-    from utilities.messages import CommandOptions
-
-    xd = InternalControllerComms(core_count=4, memory_size=4000)
-    while True:
-        asyncio.get_event_loop().run_until_complete(asyncio.sleep(5))
-        print(asyncio.get_event_loop().run_until_complete(xd.send_request(
-            ExecutionRequest(id=0, command=CommandOptions.GET_POD_DETAILS, arguments={'namespace': 'kube-system'}))))
-        print(xd._vm_connected)
+    def terminate(self):
+        self._qemu_initializer.kill_vm()

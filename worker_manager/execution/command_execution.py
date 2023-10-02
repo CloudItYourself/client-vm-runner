@@ -1,5 +1,6 @@
 import json
 from json import JSONDecodeError
+from typing import Final
 
 import websockets
 from pydantic import ValidationError
@@ -10,16 +11,18 @@ from worker_manager.vm_manager.internal_controller_comms import InternalControll
 
 
 class CommandExecution:
-    def __init__(self, server_ip: str, server_port: int, path: str, internal_comm_handler: InternalControllerComms):
+    EXECUTION_PATH: Final[str] = 'worker_execution'
+
+    def __init__(self, server_ip: str, server_port: int, internal_comm_handler: InternalControllerComms):
         self._server_ip = server_ip
         self._server_port = server_port
-        self._path = path
         self._client = None
         self._internal_comm_handler = internal_comm_handler
         self._should_terminate = False
 
     async def initialize(self):
-        self._client = await websockets.connect(f"ws://{self._server_ip}:{self._server_port}/{self._path}")
+        self._client = await websockets.connect(
+            f"ws://{self._server_ip}:{self._server_port}/{CommandExecution.EXECUTION_PATH}")
 
     @property
     def should_terminate(self):
@@ -41,3 +44,8 @@ class CommandExecution:
                                   extra={}).model_dump_json())
         except ConnectionClosed:
             self._should_terminate = True
+
+    @staticmethod
+    async def background_task(command_executor: 'CommandExecution'):
+        while True:
+            await command_executor.process_command()
