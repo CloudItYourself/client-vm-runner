@@ -38,6 +38,8 @@ class CommandExecution:
                     return
                 except WebSocketException as e:
                     pass
+                except ConnectionRefusedError as e:
+                    pass
 
     async def process_command(self) -> None:
         try:
@@ -54,6 +56,10 @@ class CommandExecution:
                 ExecutionResponse(id=-1, result=CommandResult.FAILURE, description=f'Request validation error: {e}',
                                   extra={}).model_dump_json())
         except WebSocketException:
+            self._connected = False
+            await self.wait_for_connection()
+
+        except ConnectionRefusedError as e:
             self._connected = False
             await self.wait_for_connection()
 
