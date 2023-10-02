@@ -22,13 +22,12 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
     INTERNAL_WORKER_NAMESPACE: Final[str] = 'tpc-workers'
     INTERVAL_BETWEEN_METRICS_IN_SEC: Final[int] = 1
 
-    def __init__(self, internal_comms_handler: InternalControllerComms, unique_id: str):
+    def __init__(self, internal_comms_handler: InternalControllerComms):
         super().__init__(WorkerManagersConnectionHandler.NAMESPACE)
         self._logger = logging.getLogger(LOGGER_NAME)
         self._internal_comms_handler = internal_comms_handler
         self._request_id_to_execution_response: Dict[int, ExecutionResponse] = {}
         self._should_terminate = False
-        self._unique_id = unique_id
         self._async_lock = Lock()
 
     @property
@@ -66,7 +65,7 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
             interval=WorkerManagersConnectionHandler.INTERVAL_BETWEEN_METRICS_IN_SEC)
         current_metrics = WorkerMetrics(total_cpu_utilization=cpu_stats,
                                         total_memory_used=memory_stats.used / (1024 * 1024),
-                                        total_memory_available=memory_stats.available / (1024 * 1024),
+                                        total_memory_available=memory_stats.total / (1024 * 1024),
                                         vm_cpu_utilization=vm_cpu_utilization,
                                         vm_cpu_allocated=vm_cpu_allocated,
                                         vm_memory_used=vm_memory_used,
@@ -81,9 +80,6 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
 
     def handle_callback(self, request_id: int, response: ExecutionResponse):
         self._request_id_to_execution_response[request_id] = response
-
-    async def on_connect(self):
-        await self.emit('initialization_msg', WorkerDiscoveryMessage(worker_id=self._unique_id).model_dump_json())
 
     async def on_disconnect(self):
         self._should_terminate = True
