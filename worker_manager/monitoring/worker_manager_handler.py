@@ -6,6 +6,7 @@ import psutil
 import logging
 import socketio
 from typing import Final, Dict, List
+from asyncio import Lock
 from asyncio import sleep as aiosleep
 
 from pydantic import ValidationError
@@ -28,6 +29,7 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
         self._request_id_to_execution_response: Dict[int, ExecutionResponse] = {}
         self._should_terminate = False
         self._unique_id = unique_id
+        self._async_lock = Lock()
 
     @property
     def should_terminate(self):
@@ -74,10 +76,8 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
         await self.emit('metrics_report_result', current_metrics.model_dump_json())
 
     async def on_metrics_report(self, _) -> None:
-        await self.send_metrics_report()
-
-    async def send_pc_utilization_request(self) -> None:
-        await self.emit('metrics_report')
+        async with self._async_lock:
+            await self.send_metrics_report()
 
     def handle_callback(self, request_id: int, response: ExecutionResponse):
         self._request_id_to_execution_response[request_id] = response
@@ -91,5 +91,6 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
     @staticmethod
     async def background_task(managers_connection_handler: 'WorkerManagersConnectionHandler'):
         while True:
-            await managers_connection_handler.send_metrics_report()
+            async with managers_connection_handler._async_lock:
+                await managers_connection_handler.send_metrics_report()
             await aiosleep(managers_connection_handler.INTERVAL_BETWEEN_METRICS_IN_SEC)
