@@ -31,7 +31,7 @@ class QemuInitializer:
 
     def get_vm_utilization(self, interval: int) -> Tuple[float, float, float, float]:
         cpu_stats = self._ps_process.cpu_percent(interval=interval) / self._total_cpu_count
-        memory_stats = self._ps_process.virtual_memory().used / (1024 * 1024)
+        memory_stats = self._ps_process.memory_info().rss / (1024 * 1024)
         return cpu_stats, self._core_count, memory_stats, self._memory_size
 
     def kill_vm(self):
