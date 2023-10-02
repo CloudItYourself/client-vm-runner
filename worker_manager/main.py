@@ -31,7 +31,7 @@ def main():
     command_execution = CommandExecution(server_ip=config.config.server_ip, server_port=config.config.raw_ws_port,
                                          internal_comm_handler=internal_vm_comms, unique_id=current_unique_id)
     event_loop.run_until_complete(command_execution.initialize())
-    sio.start_background_task(WorkerManagersConnectionHandler.background_task, command_execution.background_task)
+    sio.start_background_task(WorkerManagersConnectionHandler.background_task, worker_manager)
     sio.start_background_task(CommandExecution.background_task, command_execution)
     sio.start_background_task(maintenance_loop, worker_manager, command_execution, internal_vm_comms)
 
