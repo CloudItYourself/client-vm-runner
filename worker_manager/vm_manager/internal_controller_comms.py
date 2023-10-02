@@ -4,7 +4,7 @@ import logging
 import pathlib
 import ssl
 import tempfile
-from typing import Final, Optional
+from typing import Final, Optional, Tuple
 import websockets
 from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosedOK
@@ -51,6 +51,9 @@ class InternalControllerComms(WebSocketSubscriber):
     @property
     def should_terminate(self):
         return self._should_terminate
+
+    def get_vm_usage(self, interval: int) -> Tuple[float, float, float, float]:
+        return self._qemu_initializer.get_vm_utilization(interval)
 
     async def wait_for_initial_connection(self):
         exception = None
