@@ -46,7 +46,7 @@ class CommandExecution:
             await self._client.send(
                 ExecutionResponse(id=-1, result=CommandResult.FAILURE, description=f'Request validation error: {e}',
                                   extra={}).model_dump_json())
-        except ConnectionClosed:
+        except WebSocketException:
             await self.wait_for_connection()
 
     @staticmethod

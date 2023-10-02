@@ -40,6 +40,10 @@ class KubeHandler:
         return install_k3s() and \
                os.system('kubectl --help') == 0
 
+    @staticmethod
+    def reinstall_k3s() -> bool:
+        return os.system('/usr/local/bin/k3s-uninstall.sh') and KubeHandler._install_kube_env()
+
     def initialize(self, perform_check: bool = True):
         if perform_check:
             kube_installed = os.system('kubectl --help') == 0

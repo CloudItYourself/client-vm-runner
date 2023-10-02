@@ -46,11 +46,13 @@ class ConnectionHandler:
         while True:
             try:
                 data = json.loads(await websocket.recv())
+                init_message_sent = False
                 response = HandshakeReceptionMessage(**data)
                 if not self._kube_handler.kube_ready:
                     await websocket.send(
                         HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Installing k3s",
                                           SECRET_KEY=response.secret_key).model_dump_json())
+                    init_message_sent = True
                     await self.loop.run_in_executor(ProcessPoolExecutor(), ConnectionHandler.prepare_kube,
                                                     self._kube_handler)
 
@@ -63,6 +65,8 @@ class ConnectionHandler:
                 else:
                     await self.loop.run_in_executor(ThreadPoolExecutor(), ConnectionHandler.prepare_kube,
                                                     self._kube_handler)
+                    if not self._kube_handler.kube_ready:  # some error -> reinstall k3s, this is some nasty shit
+                        await self.handle_fatal_k3s_state(init_message_sent, response, websocket)
 
                 self._initialization_data = response
                 await websocket.send(
@@ -73,6 +77,7 @@ class ConnectionHandler:
             except ValidationError as e:
                 logging.error(
                     f"Received invalid internal initialization data, validation error: {e.cause}, worker will be ignored")
+                return
 
             except ConnectionClosed as e:
                 return
@@ -81,6 +86,15 @@ class ConnectionHandler:
                 logging.error(
                     f"Received non-json message.. ignoring")
                 return
+
+    async def handle_fatal_k3s_state(self, init_message_sent, response, websocket):
+        if not init_message_sent:
+            await websocket.send(
+                HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Installing k3s",
+                                  SECRET_KEY=response.secret_key).model_dump_json())
+        await self.loop.run_in_executor(ProcessPoolExecutor(), KubeHandler.reinstall_k3s)
+        await self.loop.run_in_executor(ThreadPoolExecutor(), ConnectionHandler.prepare_kube,
+                                        self._kube_handler)
 
     async def close_comms(self, websocket):
         await websocket.close()
