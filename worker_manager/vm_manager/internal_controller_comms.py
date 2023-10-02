@@ -40,7 +40,6 @@ class InternalControllerComms(WebSocketSubscriber):
         self._vm_connected = False
 
         self._vm_port = get_available_port()
-        # self._vm_port = 39019
         self._qemu_initializer.run_vm(self._vm_port)
         self.loop.run_until_complete(self.wait_for_vm_connection())
         self._current_vm_sid: Optional[str] = None

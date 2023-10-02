@@ -4,7 +4,7 @@ from typing import Final
 
 import websockets
 from pydantic import ValidationError
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from utilities.messages import ExecutionRequest, ExecutionResponse, CommandResult
 from worker_manager.monitoring.messages import WorkerDiscoveryMessage
@@ -20,19 +20,19 @@ class CommandExecution:
         self._server_port = server_port
         self._client = None
         self._internal_comm_handler = internal_comm_handler
-        self._should_terminate = False
         self._unique_id = unique_id
 
-    async def initialize(self):
-        self._client = await websockets.connect(
-            f"ws://{self._server_ip}:{self._server_port}/{CommandExecution.EXECUTION_PATH}")
-        await self._client.send(WorkerDiscoveryMessage(worker_id=self._unique_id).model_dump_json())
+    async def wait_for_connection(self) -> None:
+        while True:
+            try:
+                self._client = await websockets.connect(
+                    f"ws://{self._server_ip}:{self._server_port}/{CommandExecution.EXECUTION_PATH}")
+                await self._client.send(WorkerDiscoveryMessage(worker_id=self._unique_id).model_dump_json())
+                return
+            except WebSocketException as e:
+                pass
 
-    @property
-    def should_terminate(self):
-        return self._should_terminate
-
-    async def process_command(self):
+    async def process_command(self) -> None:
         try:
             data = await self._client.recv()
             json_data = json.loads(data)
@@ -47,9 +47,9 @@ class CommandExecution:
                 ExecutionResponse(id=-1, result=CommandResult.FAILURE, description=f'Request validation error: {e}',
                                   extra={}).model_dump_json())
         except ConnectionClosed:
-            self._should_terminate = True
+            await self.wait_for_connection()
 
     @staticmethod
-    async def background_task(command_executor: 'CommandExecution'):
+    async def background_task(command_executor: 'CommandExecution') -> None:
         while True:
             await command_executor.process_command()

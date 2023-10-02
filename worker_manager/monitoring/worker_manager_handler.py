@@ -26,13 +26,9 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
         super().__init__(WorkerManagersConnectionHandler.NAMESPACE)
         self._logger = logging.getLogger(LOGGER_NAME)
         self._internal_comms_handler = internal_comms_handler
-        self._request_id_to_execution_response: Dict[int, ExecutionResponse] = {}
         self._should_terminate = False
         self._async_lock = Lock()
-
-    @property
-    def should_terminate(self):
-        return self._should_terminate
+        self._connected = False
 
     async def get_kube_metrics(self, worker_metrics: WorkerMetrics) -> None:
         execution_request = ExecutionRequest(id=0, command=CommandOptions.GET_POD_DETAILS,
@@ -58,6 +54,9 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
             self._logger.warning(f'Failed to parse response: {response}')
 
     async def send_metrics_report(self) -> None:
+        if not self._connected:
+            return
+
         cpu_stats = psutil.cpu_percent(interval=WorkerManagersConnectionHandler.INTERVAL_BETWEEN_METRICS_IN_SEC)
         memory_stats = psutil.virtual_memory()
 
@@ -74,15 +73,15 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
         await self.get_kube_metrics(current_metrics)
         await self.emit('metrics_report_result', current_metrics.model_dump_json())
 
+    async def on_connect(self):
+        self._connected = True
+
+    async def on_disconnect(self):
+        self._connected = False
+
     async def on_metrics_report(self, _) -> None:
         async with self._async_lock:
             await self.send_metrics_report()
-
-    def handle_callback(self, request_id: int, response: ExecutionResponse):
-        self._request_id_to_execution_response[request_id] = response
-
-    async def on_disconnect(self):
-        self._should_terminate = True
 
     @staticmethod
     async def background_task(managers_connection_handler: 'WorkerManagersConnectionHandler'):

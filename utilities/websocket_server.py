@@ -49,6 +49,7 @@ class WebSocketServer:
     async def force_disconnect(self, websocket_id: str):
         if websocket_id in self._websocket_id_to_websocket:
             await self._websocket_id_to_websocket[websocket_id].close()
+            self._websocket_id_to_websocket.pop(websocket_id)
 
     async def general_handler(self, websocket, path):
         self._websocket_id_to_websocket[websocket.id] = websocket
@@ -60,4 +61,7 @@ class WebSocketServer:
                 except ConnectionClosed:
                     await self._path_to_subscribers[path].handle_disconnect(websocket.id)
         else:
+            websock_id = websocket.id
             await websocket.close()
+            if websock_id in self._websocket_id_to_websocket:
+                self._websocket_id_to_websocket.pop(websock_id)
