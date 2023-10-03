@@ -42,7 +42,7 @@ class CommandExecution:
                         worker_id=self._sio.get_sid(WorkerManagersConnectionHandler.NAMESPACE)).model_dump_json())
                     self._logger.info("Websocket connected successfully to connection broker")
                 else:
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(1)
                 return
             except WebSocketException as e:
                 pass
