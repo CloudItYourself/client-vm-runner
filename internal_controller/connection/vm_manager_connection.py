@@ -24,6 +24,7 @@ from utilities.messages import ExecutionRequest, CommandOptions, ExecutionRespon
 
 class ConnectionHandler:
     CONNECTION_PATH: Final[str] = 'vm_connection'
+    TIMEOUT_BEFORE_CLOSE: Final[int] = 10
 
     def __init__(self, port: int):
         self.stop_event = threading.Event()
@@ -80,16 +81,8 @@ class ConnectionHandler:
                     f"Received non-json message.. ignoring")
                 return
 
-    async def handle_fatal_k3s_state(self, init_message_sent, response, websocket):
-        if not init_message_sent:
-            await websocket.send(
-                HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Installing k3s",
-                                  SECRET_KEY=response.secret_key).model_dump_json())
-        await self.loop.run_in_executor(ProcessPoolExecutor(), KubeHandler.reinstall_k3s)
-        await self.loop.run_in_executor(ThreadPoolExecutor(), ConnectionHandler.prepare_kube,
-                                        self._kube_handler)
-
     async def close_comms(self, websocket):
+        await asyncio.sleep(ConnectionHandler.TIMEOUT_BEFORE_CLOSE)
         await websocket.close()
         self.stop_event.set()
 

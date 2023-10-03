@@ -17,7 +17,7 @@ from utilities.messages import PodDetails, NamespaceDetails
 class KubeHandler:
     POD_MAX_STARTUP_TIME_IN_MINUTES: Final[int] = 6
     POD_DELETION_TIME_IN_MINUTES: Final[int] = 1
-    K3S_MAX_STARTUP_TIME_IN_SECONDS: Final[int] = 120
+    K3S_MAX_STARTUP_TIME_IN_SECONDS: Final[int] = 360
     RELEVANT_CONFIG_FILE = '/etc/rancher/k3s/k3s.yaml' if sys.platform == 'linux' else f"{os.environ['USERPROFILE']}\\.kube\\config"
 
     def __init__(self):
@@ -45,7 +45,8 @@ class KubeHandler:
 
     @staticmethod
     def reinstall_k3s() -> bool:
-        return os.system('/usr/local/bin/k3s-uninstall.sh') and KubeHandler._install_kube_env()
+        os.system('/usr/local/bin/k3s-uninstall.sh')
+        return KubeHandler._install_kube_env()
 
     def prepare_kubernetes(self) -> bool:
         if not os.system('kubectl --help') == 0:
@@ -53,15 +54,17 @@ class KubeHandler:
 
         kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
         self._kube_client = kubernetes.client.CoreV1Api()
+        print(f"Waiting for metrics server")
         kube_initialized = self.wait_for_metrics_server_to_start()
-
+        print(f"Kube initialized: {kube_initialized}")
         if not kube_initialized:  # this is some wacky case
             KubeHandler.reinstall_k3s()
             kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
             self._kube_client = kubernetes.client.CoreV1Api()
             self._kube_ready = self.wait_for_metrics_server_to_start()
-
-        return self._kube_ready
+            return self._kube_ready
+        else:
+            return True
 
     def verify_pod_successful_startup(self, pod_name: str, namespace: str) -> bool:
         start_time = time.time()
@@ -169,26 +172,13 @@ class KubeHandler:
             return None
 
     def wait_for_metrics_server_to_start(self):
-        event_watch = watch.Watch()
-        metrics_started = False
-        for event in event_watch.stream(func=self._kube_client.list_namespaced_pod, namespace='kube-system',
-                                        timeout_seconds=KubeHandler.K3S_MAX_STARTUP_TIME_IN_SECONDS):
-            if event['type'] == 'ADDED' and 'metrics-server' in event['object'].metadata.name and \
-                    event['raw_object']['status']['phase'] == 'Running' and \
-                    event['raw_object']['status']['containerStatuses'][0]['ready'] is True:
-                event_watch.stop()
-                metrics_started = True
-        event_watch.stop()
-
-        if metrics_started:
-            start = time.time()
-            while time.time() - start < KubeHandler.K3S_MAX_STARTUP_TIME_IN_SECONDS * 5:
-                try:
-                    self.get_namespace_details('kube-system')
+        start = time.time()
+        while time.time() - start < KubeHandler.K3S_MAX_STARTUP_TIME_IN_SECONDS:
+            try:
+                if self.get_namespace_details('kube-system') is not None:
                     return True
-                except Exception as e:
-                    pass
-                time.sleep(0.2)
+            except Exception as e:
+                pass
         return False
 
 

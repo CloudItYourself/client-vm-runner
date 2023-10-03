@@ -73,7 +73,7 @@ class InternalControllerComms(WebSocketSubscriber):
     async def wait_for_vm_connection(self):
         connection = None
         try:
-            self._logger.info("Waiting for initial connectino from VM")
+            self._logger.info("Waiting for initial connection from VM")
             connection = await self.wait_for_initial_connection()
             self._logger.info("VM connected, sending handshake")
             await connection.send(HandshakeReceptionMessage(ip=self._server_ip, port=self._server_port,
