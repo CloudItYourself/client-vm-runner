@@ -1,4 +1,5 @@
 import logging
+import sys
 from subprocess import Popen, PIPE
 from typing import Tuple
 import psutil
@@ -31,15 +32,17 @@ class QemuInitializer:
         self._ps_process = psutil.Process(self._vm_subprocess.pid)
 
     def get_vm_utilization(self, interval: int) -> Tuple[float, float, float, float]:
-        if self._ps_process.is_running():
+        try:
             cpu_stats = self._ps_process.cpu_percent(interval=interval) / 100
             memory_stats = self._ps_process.memory_info().rss / (1024 * 1024)
             return cpu_stats, self._core_count, memory_stats, self._memory_size
-        else:
-            self.kill_vm()
+        except ProcessLookupError:
+            return 0, self._core_count, 0, self._memory_size
+        except psutil.NoSuchProcess:
             return 0, self._core_count, 0, self._memory_size
 
     def kill_vm(self):
         if self._vm_subprocess is not None:
             self._vm_subprocess.kill()
             self._vm_subprocess = None
+        sys.exit(-1)

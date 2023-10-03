@@ -10,6 +10,7 @@ from typing import Final, Dict, List
 from asyncio import Lock
 from asyncio import sleep as aiosleep
 
+import websockets.exceptions
 from pydantic import ValidationError
 
 from utilities.messages import ExecutionResponse, ExecutionRequest, CommandOptions, NamespaceDetails, CommandResult
@@ -94,5 +95,7 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
                     await managers_connection_handler.send_metrics_report()
             except socketio.exceptions.BadNamespaceError:
                 managers_connection_handler._logger.warning("Abrupt disconnect from server")
-
+            except websockets.exceptions.ConnectionClosedError:
+                managers_connection_handler._logger.warning("VM died... terminating")
+                return
             await aiosleep(managers_connection_handler.INTERVAL_BETWEEN_METRICS_IN_SEC)
