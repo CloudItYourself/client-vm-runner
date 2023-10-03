@@ -116,6 +116,10 @@ class InternalControllerComms(WebSocketSubscriber):
             if connection is not None:
                 await connection.close()
 
+    async def wait_for_full_vm_connection(self):
+        while not self._vm_connected:
+            await asyncio.sleep(1)
+
     async def handle_connect(self, sid: str):
         if self._vm_connected and self._vm_ready:
             await self._server.force_disconnect(sid)
@@ -127,7 +131,7 @@ class InternalControllerComms(WebSocketSubscriber):
     async def handle_disconnect(self, sid: str):
         if self._vm_connected and sid == self._current_vm_sid:
             self._vm_connected = False
-            self._logger.error("Vm disconnected from swebsocket interface")
+            self._logger.error("Vm disconnected from websocket interface")
             self._should_terminate = True
 
     def run_server_in_background(self):

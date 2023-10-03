@@ -56,10 +56,7 @@ class WebSocketServer:
         if path in self._path_to_subscribers:
             await self._path_to_subscribers[path].handle_connect(websocket.id)
             while True:
-                try:
-                    await asyncio.sleep(1000)
-                except ConnectionClosed:
-                    await self._path_to_subscribers[path].handle_disconnect(websocket.id)
+                await asyncio.sleep(1000)
         else:
             websock_id = websocket.id
             await websocket.close()

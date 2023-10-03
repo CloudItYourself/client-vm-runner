@@ -178,6 +178,7 @@ class KubeHandler:
                 if self.get_namespace_details('kube-system') is not None:
                     return True
             except Exception as e:
+                time.sleep(0.5)
                 pass
         return False
 

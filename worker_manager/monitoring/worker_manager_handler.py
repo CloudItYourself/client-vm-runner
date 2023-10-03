@@ -79,7 +79,7 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
         self._connected = True
 
     async def on_disconnect(self):
-        self._logger.warning("Connected to server")
+        self._logger.warning("Disconnected from server")
         self._connected = False
 
     async def on_metrics_report(self, _) -> None:
