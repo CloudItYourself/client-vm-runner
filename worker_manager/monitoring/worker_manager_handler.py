@@ -5,6 +5,7 @@ from json import JSONDecodeError
 import psutil
 import logging
 import socketio
+import socketio.exceptions
 from typing import Final, Dict, List
 from asyncio import Lock
 from asyncio import sleep as aiosleep
@@ -74,9 +75,11 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
         await self.emit('metrics_report_result', current_metrics.model_dump_json())
 
     async def on_connect(self):
+        self._logger.info("Connected to server")
         self._connected = True
 
     async def on_disconnect(self):
+        self._logger.warning("Connected to server")
         self._connected = False
 
     async def on_metrics_report(self, _) -> None:
@@ -86,6 +89,10 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
     @staticmethod
     async def background_task(managers_connection_handler: 'WorkerManagersConnectionHandler'):
         while True:
-            async with managers_connection_handler._async_lock:
-                await managers_connection_handler.send_metrics_report()
+            try:
+                async with managers_connection_handler._async_lock:
+                    await managers_connection_handler.send_metrics_report()
+            except socketio.exceptions.BadNamespaceError:
+                managers_connection_handler._logger.warning("Abrupt disconnect from server")
+
             await aiosleep(managers_connection_handler.INTERVAL_BETWEEN_METRICS_IN_SEC)

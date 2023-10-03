@@ -39,34 +39,27 @@ class ConnectionHandler:
         return self._initialization_data
 
     @staticmethod
-    def prepare_kube(kube_handler: 'KubeHandler'):
-        kube_handler.initialize()
+    def prepare_kube(kube_handler: 'KubeHandler') -> bool:
+        return kube_handler.prepare_kubernetes()
 
     async def initial_handshake_handler(self, websocket, path):
         while True:
             try:
                 data = json.loads(await websocket.recv())
-                init_message_sent = False
                 response = HandshakeReceptionMessage(**data)
-                if not self._kube_handler.kube_ready:
-                    await websocket.send(
-                        HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Installing k3s",
-                                          SECRET_KEY=response.secret_key).model_dump_json())
-                    init_message_sent = True
-                    await self.loop.run_in_executor(ProcessPoolExecutor(), ConnectionHandler.prepare_kube,
-                                                    self._kube_handler)
+                await websocket.send(
+                    HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Initializing k3s",
+                                      SECRET_KEY=response.secret_key).model_dump_json())
+                initialization_successful = await self.loop.run_in_executor(ProcessPoolExecutor(),
+                                                                            ConnectionHandler.prepare_kube,
+                                                                            self._kube_handler)
 
-                if not self._kube_handler.kube_ready:
-                    err_msg = 'Failed to install kubernetes_handling.. terminating'
+                if not initialization_successful or not self._kube_handler.kube_ready:
+                    err_msg = 'Failed to initialize kubernetes_handling.. terminating'
                     await websocket.send(
                         HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg).model_dump_json())
                     await self.close_comms(websocket)
                     raise Exception(err_msg)
-                else:
-                    await self.loop.run_in_executor(ThreadPoolExecutor(), ConnectionHandler.prepare_kube,
-                                                    self._kube_handler)
-                    if not self._kube_handler.kube_ready:  # some error -> reinstall k3s, this is some nasty shit
-                        await self.handle_fatal_k3s_state(init_message_sent, response, websocket)
 
                 self._initialization_data = response
                 await websocket.send(

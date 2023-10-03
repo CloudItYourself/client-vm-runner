@@ -32,7 +32,10 @@ class KubeHandler:
     @property
     def kube_ready(self) -> bool:
         if not self._kube_ready:
-            self._kube_ready = os.system('kubectl --help') == 0
+            if os.system('kubectl --help') == 0:
+                kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
+                self._kube_client = kubernetes.client.CoreV1Api()
+                self._kube_ready = True
         return self._kube_ready
 
     @staticmethod
@@ -44,17 +47,21 @@ class KubeHandler:
     def reinstall_k3s() -> bool:
         return os.system('/usr/local/bin/k3s-uninstall.sh') and KubeHandler._install_kube_env()
 
-    def initialize(self, perform_check: bool = True):
-        if perform_check:
-            kube_installed = os.system('kubectl --help') == 0
-            if kube_installed is False:
-                kube_installed = KubeHandler._install_kube_env()
-        else:
-            kube_installed = True
-        if kube_installed:
+    def prepare_kubernetes(self) -> bool:
+        if not os.system('kubectl --help') == 0:
+            KubeHandler._install_kube_env()
+
+        kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
+        self._kube_client = kubernetes.client.CoreV1Api()
+        kube_initialized = self.wait_for_metrics_server_to_start()
+
+        if not kube_initialized:  # this is some wacky case
+            KubeHandler.reinstall_k3s()
             kubernetes.config.load_kube_config(config_file=KubeHandler.RELEVANT_CONFIG_FILE)
             self._kube_client = kubernetes.client.CoreV1Api()
             self._kube_ready = self.wait_for_metrics_server_to_start()
+
+        return self._kube_ready
 
     def verify_pod_successful_startup(self, pod_name: str, namespace: str) -> bool:
         start_time = time.time()

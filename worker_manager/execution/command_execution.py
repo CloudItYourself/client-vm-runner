@@ -1,4 +1,5 @@
 import json
+import logging
 from json import JSONDecodeError
 from typing import Final
 from asyncio import Lock
@@ -7,6 +8,7 @@ from pydantic import ValidationError
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from utilities.messages import ExecutionRequest, ExecutionResponse, CommandResult
+from worker_manager import LOGGER_NAME
 from worker_manager.monitoring.messages import WorkerDiscoveryMessage
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms
 
@@ -16,6 +18,7 @@ class CommandExecution:
 
     def __init__(self, server_ip: str, server_port: int, internal_comm_handler: InternalControllerComms,
                  unique_id: str):
+        self._logger = logging.getLogger(LOGGER_NAME)
         self._server_ip = server_ip
         self._server_port = server_port
         self._client = None
@@ -26,14 +29,17 @@ class CommandExecution:
 
     async def wait_for_connection(self) -> None:
         async with self._connection_lock:
+
             if self._connected:
                 return
-
+            self._logger.info(
+                f"Trying to connect to ws://{self._server_ip}:{self._server_port}/{CommandExecution.EXECUTION_PATH}")
             while True:
                 try:
                     self._client = await websockets.connect(
                         f"ws://{self._server_ip}:{self._server_port}/{CommandExecution.EXECUTION_PATH}")
                     await self._client.send(WorkerDiscoveryMessage(worker_id=self._unique_id).model_dump_json())
+                    self._logger.info("Connected successfully")
                     self._connected = True
                     return
                 except WebSocketException as e:
@@ -57,10 +63,12 @@ class CommandExecution:
                                   extra={}).model_dump_json())
         except WebSocketException:
             self._connected = False
+            self._logger.info("Abruptly disconnected from server")
             await self.wait_for_connection()
 
         except ConnectionRefusedError as e:
             self._connected = False
+            self._logger.info("Abruptly disconnected from server")
             await self.wait_for_connection()
 
     @staticmethod

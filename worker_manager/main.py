@@ -1,9 +1,12 @@
 import asyncio
+import logging
 import sys
 
 import socketio
 import socketio.exceptions
 
+from utilities.logging import initialize_logger
+from worker_manager import LOGGER_NAME
 from worker_manager.configuration.configuration_manager import ConfigurationManager
 from worker_manager.monitoring.worker_manager_handler import WorkerManagersConnectionHandler
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms
@@ -14,6 +17,7 @@ async def maintenance_loop(sio: socketio.AsyncClient,
                            internal_vm_comms: InternalControllerComms):
     while True:
         if internal_vm_comms.should_terminate:
+            logging.getLogger(LOGGER_NAME).critical("VM Error: terminating")
             internal_vm_comms.terminate()
             await sio.disconnect()
             sys.exit(-1)
@@ -21,9 +25,11 @@ async def maintenance_loop(sio: socketio.AsyncClient,
 
 
 def ensure_connection(event_loop: asyncio.AbstractEventLoop, sio: socketio.AsyncClient, ip: str, port: int):
+    logging.getLogger(LOGGER_NAME).info(f"Waiting for initial socket-io connection to server: http://{ip}:{port}")
     while True:
         try:
             event_loop.run_until_complete(sio.connect(f'http://{ip}:{port}'))
+            logging.getLogger(LOGGER_NAME).info(f"Socket-io connection to http://{ip}:{port} successful")
             return
         except socketio.exceptions.ConnectionError as e:
             pass
@@ -33,6 +39,7 @@ def main():
     config = ConfigurationManager()
     sio = socketio.AsyncClient()
     event_loop = asyncio.get_event_loop()
+    initialize_logger(LOGGER_NAME)
     internal_vm_comms = InternalControllerComms(core_count=config.config.cpu_limit,
                                                 memory_size=config.config.memory_limit,
                                                 image_location=config.config.vm_image_location,

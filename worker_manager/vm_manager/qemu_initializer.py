@@ -1,6 +1,10 @@
+import logging
 from subprocess import Popen, PIPE
 from typing import Tuple
 import psutil
+
+from worker_manager import LOGGER_NAME
+
 
 class QemuInitializer:
     USER: str = 'root'
@@ -9,6 +13,7 @@ class QemuInitializer:
 
     def __init__(self, core_count: int, memory_size: int,
                  image_location: str, qemu_installation_location: str):
+        self._logger = logging.getLogger(LOGGER_NAME)
         self._image_location = image_location
         self._qemu_installation_location = qemu_installation_location
         self._core_count = core_count
@@ -21,6 +26,7 @@ class QemuInitializer:
                                                       cpu=self._core_count, memory=self._memory_size,
                                                       image=self._image_location, file=__file__,
                                                       tcp_port=forwarding_port)
+        self._logger.info(f"Initializing vm with {self._core_count} cores and {self._memory_size}Mi memory")
         self._vm_subprocess = Popen(command, stdout=PIPE, stdin=PIPE, stderr=PIPE)
         self._ps_process = psutil.Process(self._vm_subprocess.pid)
 

@@ -14,12 +14,13 @@ from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeRece
 from utilities.certificates import generate_self_signed_cert
 from utilities.sockets import get_available_port, get_ethernet_ip
 from utilities.websocket_server import WebSocketSubscriber, WebSocketServer
+from worker_manager import LOGGER_NAME
 from worker_manager.vm_manager.qemu_initializer import QemuInitializer
 
 
 class InternalControllerComms(WebSocketSubscriber):
     TIMEOUT_RETRY_COUNT: Final[int] = 10
-    TIMEOUT_BETWEEN_RUNS: Final[int] = 10
+    TIMEOUT_BETWEEN_RUNS: Final[int] = 20
     VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC: Final[int] = 2
     INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 180
     HELLO_MSG_TIMEOUT_SECS: Final[int] = 5
@@ -27,6 +28,9 @@ class InternalControllerComms(WebSocketSubscriber):
 
     def __init__(self, core_count: int, memory_size: int,
                  image_location: str, qemu_installation_location: str):
+
+        self._logger = logging.getLogger(LOGGER_NAME)
+
         self._qemu_initializer = QemuInitializer(core_count, memory_size, image_location, qemu_installation_location)
         self._server_ip = get_ethernet_ip()
         self._server_port = get_available_port()
@@ -69,34 +73,41 @@ class InternalControllerComms(WebSocketSubscriber):
     async def wait_for_vm_connection(self):
         connection = None
         try:
+            self._logger.info("Waiting for initial connectino from VM")
             connection = await self.wait_for_initial_connection()
-            logging.info("Accepted connection from internal vm process")
+            self._logger.info("VM connected, sending handshake")
             await connection.send(HandshakeReceptionMessage(ip=self._server_ip, port=self._server_port,
                                                             secret_key=self._cert).model_dump_json())
-            logging.info("Sent handshake details")
             connection_complete = False
             first_msg = True
             while not connection_complete:
                 if first_msg:
+                    self._logger.info("Waiting for initial response")
                     raw_data = await asyncio.wait_for(connection.recv(),
                                                       InternalControllerComms.INITIAL_RESPONSE_TIMEOUT_SECS)
+                    self._logger.info("Initial response received")
                     first_msg = False
                 else:
                     raw_data = await connection.recv()
                 data = json.loads(raw_data)
                 try:
                     response = HandshakeResponse(**data)
-                    logging.info(
+                    self._logger.info(
                         f"Received handshake with status: {response.STATUS}, description: {response.DESCRIPTION}")
                     if response.STATUS == HandshakeStatus.FAILURE:
+                        self._logger.error(f"Initialization error: {data}, terminating")
                         raise Exception(f"Initialization error: {data}")
                     elif response.STATUS == HandshakeStatus.SUCCESS:
+                        self._logger.info(f"Handshake successful, vm is ready")
+
                         connection_complete = True
                         self._vm_ready = True
 
                 except ValidationError as e:
+                    self._logger.info(f"Failed to parse verify data: {data}")
                     raise Exception(f"Failed to parse verify data: {data}")
                 except ConnectionClosedOK as e:
+                    self._logger.info(f"VM initial connection closed")
                     return
 
         except TimeoutError as e:
@@ -109,14 +120,14 @@ class InternalControllerComms(WebSocketSubscriber):
         if self._vm_connected and self._vm_ready:
             await self._server.force_disconnect(sid)
         else:
-            logging.info("Vm connected")
+            self._logger.info("Vm connected to websocket interface")
             self._current_vm_sid = sid
             self._vm_connected = True
 
     async def handle_disconnect(self, sid: str):
         if self._vm_connected and sid == self._current_vm_sid:
             self._vm_connected = False
-            logging.info("Vm disconnected")
+            self._logger.error("Vm disconnected from swebsocket interface")
             self._should_terminate = True
 
     def run_server_in_background(self):
@@ -129,7 +140,7 @@ class InternalControllerComms(WebSocketSubscriber):
             key_file.write_bytes(self._private_key)
 
             ssl_context.load_cert_chain(certfile=cert_file.absolute(), keyfile=key_file.absolute())
-
+        self._logger.info(f"Running raw websocket server on wss://{self._server_ip}:{self._server_port}")
         return WebSocketServer(self._server_ip, self._server_port, ssl_context=ssl_context)
 
     async def send_request(self, request: ExecutionRequest):
