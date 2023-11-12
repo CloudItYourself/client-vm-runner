@@ -1,3 +1,4 @@
+import base64
 import logging
 import os
 import string
@@ -11,6 +12,7 @@ from kubernetes import client, watch
 from kubernetes.client import ApiException
 
 from internal_controller.kubernetes_handling.kube_utility_installation_functions import install_k3s
+from internal_controller.utilities.kube_templates import DEFAULT_AUTHENTICATION_CONFIGURATION
 from utilities.messages import PodDetails, NamespaceDetails
 
 
@@ -182,15 +184,77 @@ class KubeHandler:
                 pass
         return False
 
+    def pre_load_pod(self, image_name: str, version: str, namespace: str, url: str, user: str, access_key: str) -> bool:
+        secret_name = f'{namespace}-{user}'
+        app_name = f'{namespace}-{image_name.split("/")[-1]}-prepuller'
+        if not self._secret_exists(secret_name=secret_name, namespace=namespace):
+            try:
+                self._create_namespaced_secret(secret_name=secret_name, namespace=namespace, url=url,
+                                               access_key=access_key)
+            except ApiException as e:
+                logging.error(f"Exception when calling CoreV1Api->create_namespaced_secret: {e}")
+                return False
+
+        daemonset_spec = client.V1DaemonSetSpec(
+            selector=client.V1LabelSelector(match_labels={"app": app_name}),
+            template=client.V1PodTemplateSpec(
+                metadata=client.V1ObjectMeta(labels={"app": app_name}),
+                spec=client.V1PodSpec(
+                    image_pull_secrets=[client.V1LocalObjectReference(name=secret_name)],
+                    init_containers=[
+                        client.V1Container(
+                            name=app_name,
+                            image=f"{image_name}:{version}",
+                            command=["sh -c 'true'"]
+                        )
+                    ],
+                    containers=[
+                        client.V1Container(
+                            name="pause",
+                            image="gcr.io/google_containers/pause"
+                        )
+                    ]
+                )
+            )
+        )
+
+        daemonset = client.V1DaemonSet(
+            api_version="apps/v1",
+            kind="DaemonSet",
+            metadata=client.V1ObjectMeta(name=f'{namespace}-{image_name.split("/")[-1]}-ds'),
+            spec=daemonset_spec
+        )
+        app_api = kubernetes.client.AppsV1Api()
+        app_api.create_namespaced_daemon_set(namespace=namespace, body=daemonset)
+
+    def _create_namespaced_secret(self, secret_name: str, namespace: str, url: str, access_key: str):
+        self._kube_client.create_namespaced_secret(
+            namespace=namespace,
+            body=client.V1Secret(
+                metadata=client.V1ObjectMeta(name=secret_name),
+                type='kubernetes.io/dockerconfigjson',
+                data={".dockerconfigjson": base64.b64encode(
+                    DEFAULT_AUTHENTICATION_CONFIGURATION.format(url=url, token=access_key).encode()).decode()}
+            )
+        )
+
+    def _secret_exists(self, secret_name: str, namespace: str) -> bool:
+        try:
+            return self._kube_client.read_namespaced_secret(secret_name, namespace) is not None
+        except ApiException as e:
+            return False
+
 
 if __name__ == '__main__':
     xd = KubeHandler()
-    xd.initialize()
+    xd.kube_ready
+    xd.pre_load_pod('registry.gitlab.com/ronen48/tpc/tpc-worker-python38', 'latest', 'tpc-workers',
+                    'https://registry.gitlab.com/ronen48/tpc', 'ronen', 'glpat-_rsuMcegbNeZL3pwUoxj')
     # xd.delete_pod('nginx-guveaaqtdz', 'tpc-workers')
     # xd.delete_all_pods_in_namespace('tpc-workers')
-    xd.create_namespace('tpc-workers')
+    #xd.create_namespace('tpc-workers')
     # xd.run_pod("nginxss", "latest", {}, 'tpc-workers')
-    print(xd.get_namespace_details('kube-system'))
+    #print(xd.get_namespace_details('kube-system'))
     # ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
     # for i in ret.items:
     #     print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
