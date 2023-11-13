@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 import os
 import string
@@ -12,7 +13,6 @@ from kubernetes import client, watch
 from kubernetes.client import ApiException
 
 from internal_controller.kubernetes_handling.kube_utility_installation_functions import install_k3s
-from internal_controller.utilities.kube_templates import DEFAULT_AUTHENTICATION_CONFIGURATION
 from utilities.messages import PodDetails, NamespaceDetails
 
 
@@ -187,6 +187,7 @@ class KubeHandler:
     def pre_load_pod(self, image_name: str, version: str, namespace: str, url: str, user: str, access_key: str) -> bool:
         secret_name = f'{namespace}-{user}'
         app_name = f'{namespace}-{image_name.split("/")[-1]}-prepuller'
+        ds_name = f'{namespace}-{image_name.split("/")[-1]}-ds'
         if not self._secret_exists(secret_name=secret_name, namespace=namespace):
             try:
                 self._create_namespaced_secret(secret_name=secret_name, namespace=namespace, url=url,
@@ -205,7 +206,7 @@ class KubeHandler:
                         client.V1Container(
                             name=app_name,
                             image=f"{image_name}:{version}",
-                            command=["sh -c 'true'"]
+                            command=["/bin/sh", "-c", "'true'"]
                         )
                     ],
                     containers=[
@@ -221,20 +222,37 @@ class KubeHandler:
         daemonset = client.V1DaemonSet(
             api_version="apps/v1",
             kind="DaemonSet",
-            metadata=client.V1ObjectMeta(name=f'{namespace}-{image_name.split("/")[-1]}-ds'),
+            metadata=client.V1ObjectMeta(name=ds_name),
             spec=daemonset_spec
         )
+        self._delete_ds_if_exists(ds_name=ds_name, namespace=namespace)
+
         app_api = kubernetes.client.AppsV1Api()
-        app_api.create_namespaced_daemon_set(namespace=namespace, body=daemonset)
+        try:
+            app_api.create_namespaced_daemon_set(namespace=namespace, body=daemonset)
+        except ApiException as e:
+            logging.error(f"Exception when calling app_api->create_namespaced_daemon_set: {e}")
+            return False
+
+        return True
 
     def _create_namespaced_secret(self, secret_name: str, namespace: str, url: str, access_key: str):
+        docker_config = {
+            "auths": {
+                url: {
+                    "username": "usr",
+                    "password": access_key,
+                    "auth": base64.b64encode(f"usr:{access_key}".encode()).decode()
+                }
+            }
+        }
+
         self._kube_client.create_namespaced_secret(
             namespace=namespace,
             body=client.V1Secret(
                 metadata=client.V1ObjectMeta(name=secret_name),
                 type='kubernetes.io/dockerconfigjson',
-                data={".dockerconfigjson": base64.b64encode(
-                    DEFAULT_AUTHENTICATION_CONFIGURATION.format(url=url, token=access_key).encode()).decode()}
+                data={".dockerconfigjson": base64.b64encode(json.dumps(docker_config).encode()).decode()}
             )
         )
 
@@ -244,6 +262,13 @@ class KubeHandler:
         except ApiException as e:
             return False
 
+    def _delete_ds_if_exists(self, ds_name: str, namespace: str) -> None:
+        try:
+            app_api = kubernetes.client.AppsV1Api()
+            app_api.delete_namespaced_daemon_set(ds_name, namespace)
+        except ApiException as e:
+            pass
+
 
 if __name__ == '__main__':
     xd = KubeHandler()
@@ -252,9 +277,9 @@ if __name__ == '__main__':
                     'https://registry.gitlab.com/ronen48/tpc', 'ronen', 'glpat-_rsuMcegbNeZL3pwUoxj')
     # xd.delete_pod('nginx-guveaaqtdz', 'tpc-workers')
     # xd.delete_all_pods_in_namespace('tpc-workers')
-    #xd.create_namespace('tpc-workers')
+    # xd.create_namespace('tpc-workers')
     # xd.run_pod("nginxss", "latest", {}, 'tpc-workers')
-    #print(xd.get_namespace_details('kube-system'))
+    # print(xd.get_namespace_details('kube-system'))
     # ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
     # for i in ret.items:
     #     print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
