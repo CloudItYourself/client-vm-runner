@@ -123,8 +123,15 @@ class ConnectionHandler:
             data = json.loads(data)
             execution_request = ExecutionRequest(**data)
             if execution_request.command == CommandOptions.PRE_LOAD_IMAGE:
-                # TODO: add pre_load_option
-                pass
+                execution_result = self._kube_handler.pre_load_pod(execution_request.arguments['image'],
+                                                                   execution_request.arguments['version'],
+                                                                   execution_request.arguments['namespace'],
+                                                                   execution_request.arguments['url'],
+                                                                   execution_request.arguments['user'],
+                                                                   execution_request.arguments['access_key'])
+                await self._client.send(ExecutionResponse(id=execution_request.id, result=execution_result,
+                                                          description='').model_dump_json())
+
             elif execution_request.command == CommandOptions.RUN_POD:
                 await self.handle_pod_run_request(execution_request)
 

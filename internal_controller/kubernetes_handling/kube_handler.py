@@ -268,18 +268,3 @@ class KubeHandler:
             app_api.delete_namespaced_daemon_set(ds_name, namespace)
         except ApiException as e:
             pass
-
-
-if __name__ == '__main__':
-    xd = KubeHandler()
-    xd.kube_ready
-    xd.pre_load_pod('registry.gitlab.com/ronen48/tpc/tpc-worker-python38', 'latest', 'tpc-workers',
-                    'https://registry.gitlab.com/ronen48/tpc', 'ronen', 'glpat-_rsuMcegbNeZL3pwUoxj')
-    # xd.delete_pod('nginx-guveaaqtdz', 'tpc-workers')
-    # xd.delete_all_pods_in_namespace('tpc-workers')
-    # xd.create_namespace('tpc-workers')
-    # xd.run_pod("nginxss", "latest", {}, 'tpc-workers')
-    # print(xd.get_namespace_details('kube-system'))
-    # ret = xd._kube_client.list_pod_for_all_namespaces(watch=False)
-    # for i in ret.items:
-    #     print("%s\t%s\t%s" % (i.status.pod_ip, i.metadata.namespace, i.metadata.name))
