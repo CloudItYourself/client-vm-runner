@@ -5,8 +5,7 @@ import pathlib
 from json import JSONDecodeError
 from typing import Final
 from pydantic import BaseModel, ValidationError
-
-from utilities.singleton import Singleton
+from tpc_backend_libraries.general.singleton import Singleton
 
 
 class ConfigurationData(BaseModel):

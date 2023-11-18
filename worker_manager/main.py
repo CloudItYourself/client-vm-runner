@@ -4,8 +4,8 @@ import sys
 
 import socketio
 import socketio.exceptions
+from tpc_backend_libraries.general.logging import initialize_logger
 
-from utilities.logging import initialize_logger
 from worker_manager import LOGGER_NAME
 from worker_manager.configuration.configuration_manager import ConfigurationManager
 from worker_manager.monitoring.worker_manager_handler import WorkerManagersConnectionHandler
