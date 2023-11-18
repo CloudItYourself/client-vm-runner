@@ -50,9 +50,7 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
             else:
                 self._logger.warning(f'Failed to get metrics, error: {execution_response.description}')
 
-        except JSONDecodeError as e:
-            self._logger.warning(f'Failed to parse response: {response}')
-        except ValidationError as e:
+        except (JSONDecodeError,ValidationError) as e:
             self._logger.warning(f'Failed to parse response: {response}')
 
     async def send_metrics_report(self) -> None:
