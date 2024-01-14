@@ -10,7 +10,6 @@ from worker_manager import LOGGER_NAME
 from worker_manager.configuration.configuration_manager import ConfigurationManager
 from worker_manager.monitoring.worker_manager_handler import WorkerManagersConnectionHandler
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms
-from worker_manager.execution.command_execution import CommandExecution
 
 
 async def maintenance_loop(sio: socketio.AsyncClient,
@@ -47,12 +46,8 @@ def main():
     worker_manager = WorkerManagersConnectionHandler(internal_vm_comms)
     sio.register_namespace(worker_manager)
     ensure_connection(event_loop, sio, config.config.server_ip, config.config.server_port)
-    command_execution = CommandExecution(server_ip=config.config.server_ip, server_port=config.config.raw_ws_port,
-                                         internal_comm_handler=internal_vm_comms, sio_object=sio)
-    event_loop.run_until_complete(command_execution.wait_for_connection())
     event_loop.run_until_complete(internal_vm_comms.wait_for_full_vm_connection())
     sio.start_background_task(WorkerManagersConnectionHandler.background_task, worker_manager)
-    sio.start_background_task(CommandExecution.background_task, command_execution)
     sio.start_background_task(maintenance_loop, sio, internal_vm_comms)
 
     event_loop.run_until_complete(sio.wait())

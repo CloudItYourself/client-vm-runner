@@ -12,6 +12,7 @@ from tpc_backend_libraries.security.ssl_generation import generate_self_signed_c
 from tpc_backend_libraries.websockets.websocket_server import WebSocketSubscriber, WebSocketServer
 from websockets.exceptions import ConnectionClosedOK
 
+from utilities.machine_identification import get_machine_unique_id
 from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeReceptionMessage, ExecutionResponse, \
     ExecutionRequest
 from worker_manager import LOGGER_NAME
@@ -43,12 +44,12 @@ class InternalControllerComms(WebSocketSubscriber):
         self._vm_ready = False
         self._vm_connected = False
 
+        self._machine_details = get_machine_unique_id()
         self._vm_port = get_available_port()
         self._qemu_initializer.run_vm(self._vm_port)
         self.loop.run_until_complete(self.wait_for_vm_connection())
         self._current_vm_sid: Optional[str] = None
         self._lock = asyncio.Lock()
-        self._current_job_id = 0
         self._should_terminate = False
 
     @property
@@ -146,11 +147,6 @@ class InternalControllerComms(WebSocketSubscriber):
             ssl_context.load_cert_chain(certfile=cert_file.absolute(), keyfile=key_file.absolute())
         self._logger.info(f"Running raw websocket server on wss://{self._server_ip}:{self._server_port}")
         return WebSocketServer(self._server_ip, self._server_port, ssl_context=ssl_context)
-
-    async def send_request(self, request: ExecutionRequest):
-        async with self._lock:
-            return await self._server.send_message(self._current_vm_sid, request.model_dump_json(),
-                                                   wait_for_response=True)
 
     def terminate(self):
         self._qemu_initializer.kill_vm()

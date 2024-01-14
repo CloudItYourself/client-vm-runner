@@ -4,5 +4,7 @@ setup(
     name="internal_controller",
     version="0.0.1",
     packages=find_packages(),
-    install_requires=['pydantic', 'websockets','pycryptodome']
+    package_data={
+        '': ['**/*.tgz'],
+    },install_requires=['pydantic', 'websockets', 'pycryptodome', 'requests', 'aiohttp']
 )

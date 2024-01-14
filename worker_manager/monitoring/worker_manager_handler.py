@@ -11,9 +11,6 @@ from asyncio import Lock
 from asyncio import sleep as aiosleep
 
 import websockets.exceptions
-from pydantic import ValidationError
-
-from utilities.messages import ExecutionResponse, ExecutionRequest, CommandOptions, NamespaceDetails, CommandResult
 from worker_manager import LOGGER_NAME
 from worker_manager.monitoring.messages import WorkerMetrics, ContainerMetrics, WorkerDiscoveryMessage
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms
@@ -32,27 +29,6 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
         self._async_lock = Lock()
         self._connected = False
 
-    async def get_kube_metrics(self, worker_metrics: WorkerMetrics) -> None:
-        execution_request = ExecutionRequest(id=0, command=CommandOptions.GET_POD_DETAILS,
-                                             arguments={
-                                                 'namespace': WorkerManagersConnectionHandler.INTERNAL_WORKER_NAMESPACE})
-        response = await self._internal_comms_handler.send_request(execution_request)
-        try:
-            execution_response = ExecutionResponse(**json.loads(response))
-            if execution_response.result == CommandResult.SUCCESS:
-                namespace_details = NamespaceDetails(**execution_response.extra)
-                for worker in namespace_details.pod_details:
-                    cpu_usage = float(re.findall('(?s)([\d]+)', worker.cpu_utilization)[0]) * 10E9
-                    memory_usage = float(re.findall('(?s)([\d]+)', worker.memory_utilization)[0]) / 1024
-                    worker_metrics.container_metrics.append(ContainerMetrics(
-                        pod_name=worker.pod_name, cpu_utilization=cpu_usage, memory_used=memory_usage
-                    ))
-            else:
-                self._logger.warning(f'Failed to get metrics, error: {execution_response.description}')
-
-        except (JSONDecodeError,ValidationError) as e:
-            self._logger.warning(f'Failed to parse response: {response}')
-
     async def send_metrics_report(self) -> None:
         if not self._connected:
             return
@@ -67,10 +43,7 @@ class WorkerManagersConnectionHandler(socketio.AsyncClientNamespace):
                                         total_memory_available=memory_stats.total / (1024 * 1024),
                                         vm_cpu_utilization=vm_cpu_utilization,
                                         vm_cpu_allocated=vm_cpu_allocated,
-                                        vm_memory_used=vm_memory_used,
-                                        vm_memory_available=vm_memory_available,
-                                        container_metrics=list())
-        await self.get_kube_metrics(current_metrics)
+                                        vm_memory_used=vm_memory_used)
         await self.emit('metrics_report_result', current_metrics.model_dump_json())
 
     async def on_connect(self):

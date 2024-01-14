@@ -13,6 +13,7 @@ class ConfigurationData(BaseModel):
     server_port: int
     raw_ws_port: int
 
+    server_url: str
     cpu_limit: int
     memory_limit: int
     qemu_installation_location: str
@@ -39,7 +40,8 @@ class ConfigurationManager(metaclass=Singleton):
             ConfigurationData(server_ip='127.0.0.1', server_port=8080, raw_ws_port=9090, cpu_limit=4,
                               memory_limit=4096,
                               qemu_installation_location='undefined',
-                              vm_image_location='undefined').model_dump_json(indent=4))
+                              vm_image_location='undefined',
+                              server_url='127.0.0.1').model_dump_json(indent=4))
 
     def get_configurations(self) -> ConfigurationData:
         try:
