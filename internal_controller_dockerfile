@@ -1,15 +1,12 @@
-FROM ubuntu:20.04
+FROM registry.gitlab.com/ronen48/ciy/python-311:latest
 
-RUN apt update
-RUN apt install -y curl wget python3 python3-pip
 COPY internal_controller/ /usr/src/app/internal_controller/
 COPY worker_manager/ /usr/src/app/worker_manager/
 COPY utilities/ /usr/src/app/utilities/
 COPY internal_controller_setup.py /usr/src/app/internal_controller_setup.py
-COPY setup.py /usr/src/app/setup.py
 COPY requirements.txt /usr/src/app/requirements.txt
 
 COPY internal_controller/startup.rc.local /etc/rc.local
 RUN chmod +x /etc/rc.local
-RUN cd /usr/src/app && python3 internal_controller_setup.py install
+RUN cd /usr/src/app && python3.11 internal_controller_setup.py install
 RUN pip3 install -r /usr/src/app/requirements.txt

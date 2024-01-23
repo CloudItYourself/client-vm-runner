@@ -6,5 +6,5 @@ setup(
     packages=find_packages(),
     package_data={
         '': ['**/*.tgz'],
-    },install_requires=['pydantic', 'websockets', 'pycryptodome', 'requests', 'aiohttp']
+    },install_requires=['pydantic', 'websockets', 'pycryptodome', 'requests', 'aiohttp~=3.8.5']
 )
