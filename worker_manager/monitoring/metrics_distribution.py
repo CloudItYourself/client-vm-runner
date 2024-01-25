@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import logging
 from typing import Final
 
@@ -30,7 +31,7 @@ class MetricsDistribution:
 
         vm_cpu_utilization, vm_cpu_allocated, vm_memory_used, vm_memory_available = self._internal_comms_handler.get_vm_usage(
             interval=MetricsDistribution.INTERVAL_BETWEEN_METRICS_IN_SEC)
-        return WorkerMetrics(total_cpu_utilization=cpu_stats,
+        return WorkerMetrics(timestamp=datetime.datetime.utcnow().timestamp(), total_cpu_utilization=cpu_stats,
                              total_memory_used=memory_stats.used / (1024 * 1024),
                              total_memory_available=memory_stats.total / (1024 * 1024),
                              vm_cpu_utilization=vm_cpu_utilization,
@@ -42,9 +43,10 @@ class MetricsDistribution:
             try:
                 current_metrics: WorkerMetrics = await self._event_loop.run_in_executor(None, self.get_metrics)
                 async with aiohttp.ClientSession() as session:
-                    response = await session.put(url=f'{self._server_url}/api/v1/node_metrics/{str(hash(self._node_details))}',
-                                                  data=current_metrics.model_dump_json(),
-                                                  headers={"Content-Type": "application/json"})
+                    response = await session.put(
+                        url=f'{self._server_url}/api/v1/node_metrics/{str(hash(self._node_details))}',
+                        data=current_metrics.model_dump_json(),
+                        headers={"Content-Type": "application/json"})
                     if response.status != 200:
                         raise RuntimeError("Node keepalive failed!")
             except Exception as e:
