@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel
-from tpc_backend_libraries.api.cluster_access.v1.node_registrar import NodeDetails
+from ciy_backend_libraries.api.cluster_access.v1.node_registrar import NodeDetails
 
 
 class HandshakeReceptionMessage(BaseModel):

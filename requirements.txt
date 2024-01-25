@@ -7,3 +7,4 @@ pydantic
 cryptography
 aiohttp
 kubernetes
+ciy_backend_libraries

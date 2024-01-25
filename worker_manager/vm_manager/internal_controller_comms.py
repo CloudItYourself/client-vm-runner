@@ -7,14 +7,13 @@ import tempfile
 from typing import Final, Optional, Tuple
 import websockets
 from pydantic import ValidationError
-from tpc_backend_libraries.general.sockets import get_ethernet_ip, get_available_port
-from tpc_backend_libraries.security.ssl_generation import generate_self_signed_cert
-from tpc_backend_libraries.websockets.websocket_server import WebSocketSubscriber, WebSocketServer
+from ciy_backend_libraries.general.sockets import get_ethernet_ip, get_available_port
+from ciy_backend_libraries.security.ssl_generation import generate_self_signed_cert
+from ciy_backend_libraries.websockets.websocket_server import WebSocketSubscriber, WebSocketServer
 from websockets.exceptions import ConnectionClosedOK
 
 from utilities.machine_identification import get_machine_unique_id
-from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeReceptionMessage, ExecutionResponse, \
-    ExecutionRequest
+from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeReceptionMessage
 from worker_manager import LOGGER_NAME
 from worker_manager.vm_manager.qemu_initializer import QemuInitializer
 

@@ -8,7 +8,7 @@ import threading
 
 import aiohttp
 import websockets
-from tpc_backend_libraries.api.cluster_access.v1.node_registrar import RegistrationDetails
+from ciy_backend_libraries.api.cluster_access.v1.node_registrar import RegistrationDetails
 
 from internal_controller.installers.environment_installer import EnvironmentInstaller
 
@@ -60,14 +60,15 @@ class ConnectionHandler:
                     HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Initializing k3s",
                                       SECRET_KEY=response.secret_key).model_dump_json())
 
-                initialization_successful = await self.loop.run_in_executor(ProcessPoolExecutor(),
+                initialization_successful = await self.loop.run_in_executor(self._process_pool,
                                                                             EnvironmentInstaller.download_k3s_agent)
 
-                initialization_successful &= await self.loop.run_in_executor(ProcessPoolExecutor(),
+                initialization_successful &= await self.loop.run_in_executor(self._process_pool,
                                                                              EnvironmentInstaller.install_tailscale)
 
                 registration_details = await self.get_node_join_details()
-                args = ['--token', registration_details.k8s_token, '--server',
+                args = ['--token', registration_details.k8s_token, '--server', '--node_token',
+                        str(hash(self.initialization_data.machine_unique_identification)),
                         f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}',
                         f'--vpn-auth="name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=https://{registration_details.vpn_ip}:{registration_details.vpn_port}"']
 

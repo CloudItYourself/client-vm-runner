@@ -8,7 +8,7 @@ import requests
 
 
 class EnvironmentInstaller:
-    K3S_URL: Final[str] = 'https://github.com/k3s-io/k3s/releases/download/v1.28.5+k3s1/k3s'
+    K3S_URL: Final[str] = 'https://github.com/k3s-io/k3s/releases/download/v1.27.9+k3s1/k3s'
     K3S_BINARY_LOCATION: Final[str] = '/usr/local/bin/k3s'
 
     @staticmethod

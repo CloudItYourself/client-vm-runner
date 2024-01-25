@@ -10,5 +10,5 @@
 # bits.
 #
 # By default, this script does nothing.
-/usr/bin/python3 /usr/src/app/internal_controller/main.py &
+/usr/bin/python3.11 /usr/src/app/internal_controller/main.py &
 exit 0
