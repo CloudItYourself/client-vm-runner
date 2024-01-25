@@ -15,6 +15,7 @@ from websockets.exceptions import ConnectionClosedOK
 from utilities.machine_identification import get_machine_unique_id
 from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeReceptionMessage
 from worker_manager import LOGGER_NAME
+from worker_manager.configuration.configuration_manager import ConfigurationManager
 from worker_manager.vm_manager.qemu_initializer import QemuInitializer
 
 
@@ -22,7 +23,7 @@ class InternalControllerComms(WebSocketSubscriber):
     TIMEOUT_RETRY_COUNT: Final[int] = 10
     TIMEOUT_BETWEEN_RUNS: Final[int] = 20
     VM_TIMEOUT_BETWEEN_CONNECTIONS_IN_SEC: Final[int] = 2
-    INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 180
+    INITIAL_RESPONSE_TIMEOUT_SECS: Final[int] = 600
     HELLO_MSG_TIMEOUT_SECS: Final[int] = 5
     CONNECTION_PATH: Final[str] = '/vm_connection'
 
@@ -35,7 +36,7 @@ class InternalControllerComms(WebSocketSubscriber):
         self._server_ip = get_ethernet_ip()
         self._server_port = get_available_port()
         self._cert, self._private_key = generate_self_signed_cert(self._server_ip, self._server_ip)
-
+        self._server_url = ConfigurationManager().config.server_url
         self.loop = asyncio.get_event_loop()
         self._server = self.run_server_in_background()
         self._server.subscribe(InternalControllerComms.CONNECTION_PATH, self)
@@ -77,7 +78,8 @@ class InternalControllerComms(WebSocketSubscriber):
             connection = await self.wait_for_initial_connection()
             self._logger.info("VM connected, sending handshake")
             await connection.send(HandshakeReceptionMessage(ip=self._server_ip, port=self._server_port,
-                                                            secret_key=self._cert).model_dump_json())
+                                                            secret_key=self._cert, server_url=self._server_url,
+                                                            machine_unique_identification=self._machine_details).model_dump_json())
             connection_complete = False
             first_msg = True
             while not connection_complete:
