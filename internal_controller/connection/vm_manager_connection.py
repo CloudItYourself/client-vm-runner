@@ -47,7 +47,7 @@ class ConnectionHandler:
     async def get_node_join_details(self) -> RegistrationDetails:
         async with aiohttp.ClientSession() as session:
             response = await session.post(url=f'{self.initialization_data.server_url}/api/v1/node_token',
-                                          data=self.initialization_data.machine_unique_identification,
+                                          data=self.initialization_data.machine_unique_identification.model_dump_json(),
                                           headers={"Content-Type": "application/json"})
             return RegistrationDetails(**await response.json())
 
@@ -56,6 +56,9 @@ class ConnectionHandler:
             try:
                 data = json.loads(await websocket.recv())
                 response = HandshakeReceptionMessage(**data)
+
+                self._initialization_data = response
+
                 await websocket.send(
                     HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Initializing k3s",
                                       SECRET_KEY=response.secret_key).model_dump_json())
@@ -67,14 +70,17 @@ class ConnectionHandler:
                                                                              EnvironmentInstaller.install_tailscale)
 
                 registration_details = await self.get_node_join_details()
-                args = ['--token', registration_details.k8s_token, '--server', '--node_token',
-                        str(hash(self.initialization_data.machine_unique_identification)),
-                        f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}',
-                        f'--vpn-auth="name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=https://{registration_details.vpn_ip}:{registration_details.vpn_port}"']
 
+                args = ['agent', '--token', registration_details.k8s_token, '--server',
+                        f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
+                        str(hash(self.initialization_data.machine_unique_identification)),
+                        f'--vpn-auth="name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}"']
+                
                 self._agent_process = await asyncio.create_subprocess_exec(
                     EnvironmentInstaller.K3S_BINARY_LOCATION, *args, stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL)
+
+
 
                 if self._agent_process.returncode is None:
                     self.loop.create_task(self.send_periodic_keepalive())
@@ -133,7 +139,7 @@ class ConnectionHandler:
         while True:
             async with aiohttp.ClientSession() as session:
                 await session.put(url=f'{self.initialization_data.server_url}/api/v1/node_keepalive',
-                                  data=self.initialization_data.machine_unique_identification,
+                                  data=self.initialization_data.machine_unique_identification.model_dump_json(),
                                   headers={"Content-Type": "application/json"})
             await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
