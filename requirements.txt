@@ -1,4 +1,3 @@
-python-socketio
 jsonschema
 websocket-client
 websockets
@@ -8,3 +7,4 @@ cryptography
 aiohttp
 kubernetes
 ciy_backend_libraries
+psutil
