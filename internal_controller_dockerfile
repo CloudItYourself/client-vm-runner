@@ -1,6 +1,7 @@
 FROM registry.gitlab.com/ronen48/ciy/python-311:latest
 
 RUN apt-get update -y
+RUN apt install dos2unix -y
 COPY internal_controller/ /usr/src/app/internal_controller/
 COPY worker_manager/ /usr/src/app/worker_manager/
 COPY utilities/ /usr/src/app/utilities/
@@ -8,6 +9,7 @@ COPY internal_controller_setup.py /usr/src/app/internal_controller_setup.py
 COPY requirements.txt /usr/src/app/requirements.txt
 
 COPY internal_controller/startup.rc.local /etc/rc.local
+RUN dos2unix /etc/rc.local
 RUN chmod +x /etc/rc.local
 RUN cd /usr/src/app && python3.11 internal_controller_setup.py install
 RUN pip3 install --extra-index-url=https://ci-python-package-user:glpat-3zqVQwKxwU_Qsvc_8fw8@gitlab.com/api/v4/projects/54080196/packages/pypi/simple -r /usr/src/app/requirements.txt
