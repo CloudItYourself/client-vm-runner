@@ -1,7 +1,7 @@
 FROM registry.gitlab.com/ronen48/ciy/python-311:latest
 
 RUN apt-get update -y
-RUN apt install dos2unix -y
+RUN apt install dos2unix iptables -y
 COPY internal_controller/ /usr/src/app/internal_controller/
 COPY worker_manager/ /usr/src/app/worker_manager/
 COPY utilities/ /usr/src/app/utilities/
