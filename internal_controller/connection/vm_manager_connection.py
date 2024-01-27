@@ -2,7 +2,9 @@ import asyncio
 import json
 import logging
 import pathlib
+import random
 import ssl
+import string
 import tempfile
 import threading
 
@@ -73,14 +75,13 @@ class ConnectionHandler:
 
                 args = ['agent', '--token', registration_details.k8s_token, '--server',
                         f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
-                        str(hash(self.initialization_data.machine_unique_identification)),
+                        ''.join(random.choices(string.ascii_lowercase, k=16)),
+                        '--node-label', f'unique-name={str(hash(self.initialization_data.machine_unique_identification))}',
                         f'--vpn-auth="name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}"']
-                
+
                 self._agent_process = await asyncio.create_subprocess_exec(
                     EnvironmentInstaller.K3S_BINARY_LOCATION, *args, stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL)
-
-
 
                 if self._agent_process.returncode is None:
                     self.loop.create_task(self.send_periodic_keepalive())
