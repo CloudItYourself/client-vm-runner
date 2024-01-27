@@ -84,7 +84,7 @@ class ConnectionHandler:
                     stderr=asyncio.subprocess.DEVNULL)
 
                 if self._agent_process.returncode is None:
-                    self.loop.create_task(self.send_periodic_keepalive())
+                    await self.loop.create_task(self.send_periodic_keepalive())
 
                 await asyncio.sleep(ConnectionHandler.TIMEOUT_FOR_AGENT_STARTUP)
 
