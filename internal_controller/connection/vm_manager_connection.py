@@ -139,7 +139,7 @@ class ConnectionHandler:
         while True:
             async with aiohttp.ClientSession() as session:
                 await session.put(url=f'{self.initialization_data.server_url}/api/v1/node_keepalive',
-                                  data=self.initialization_data.machine_unique_identification.model_dump_json(),
+                                  json=self.initialization_data.machine_unique_identification.model_dump(),
                                   headers={"Content-Type": "application/json"})
             await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
