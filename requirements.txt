@@ -6,5 +6,5 @@ pydantic
 cryptography
 aiohttp
 kubernetes
-ciy_backend_libraries==0.0.4
+ciy_backend_libraries==0.0.5
 psutil

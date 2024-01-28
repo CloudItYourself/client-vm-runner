@@ -87,6 +87,8 @@ class ConnectionHandler:
                     'agent', '--token', registration_details.k8s_token, '--server',
                     f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
                     ''.join(random.choices(string.ascii_lowercase, k=16)),
+                    '--kubelet-arg','cgroups-per-qos=false',
+                    '--kubelet-arg', 'enforce-node-allocatable=',
                     '--node-label',
                     f'unique-name={str(self.initialization_data.machine_unique_identification)}',
                     f'--vpn-auth-file={vpn_file.absolute()}',
