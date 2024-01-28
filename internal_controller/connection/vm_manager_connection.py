@@ -30,7 +30,7 @@ class ConnectionHandler:
     TIMEOUT_BEFORE_CLOSE: Final[int] = 10
     TIMEOUT_FOR_AGENT_STARTUP: Final[int] = 10
     KEEPALIVE_REFRESH_TIME_IN_SECONDS: Final[float] = 0.5
-    TAILSCALE_JOIN_DETAILS_FILE_NAME:Final[str] = 'tailscale_params.txt'
+    TAILSCALE_JOIN_DETAILS_FILE_NAME: Final[str] = 'tailscale_params.txt'
 
     def __init__(self, port: int):
         self.stop_event = threading.Event()
@@ -77,16 +77,10 @@ class ConnectionHandler:
                 logging.info(f"Node registration details received.. writing VPN details to file")
 
                 vpn_file = pathlib.Path(self._tmp_dir.name) / ConnectionHandler.TAILSCALE_JOIN_DETAILS_FILE_NAME
-                vpn_file.write_text(f'name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}')
+                vpn_file.write_text(
+                    f'name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}')
 
                 logging.info(f"Running k3s agent...")
-                print(''.join(['agent', '--token', registration_details.k8s_token, '--server',
-                    f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
-                    ''.join(random.choices(string.ascii_lowercase, k=16)),
-                    '--node-label',
-                    f'unique-name={str(hash(self.initialization_data.machine_unique_identification))}',
-                    f'--vpn-auth-file={vpn_file.absolute()}']))
-
 
                 self._agent_process = await asyncio.create_subprocess_exec(
                     EnvironmentInstaller.K3S_BINARY_LOCATION,
@@ -94,7 +88,7 @@ class ConnectionHandler:
                     f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
                     ''.join(random.choices(string.ascii_lowercase, k=16)),
                     '--node-label',
-                    f'unique-name={str(hash(self.initialization_data.machine_unique_identification))}',
+                    f'unique-name={str(self.initialization_data.machine_unique_identification)}',
                     f'--vpn-auth-file={vpn_file.absolute()}',
                     stdout=None, stderr=None)
 

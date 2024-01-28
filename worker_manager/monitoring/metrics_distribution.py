@@ -44,7 +44,7 @@ class MetricsDistribution:
                 current_metrics: WorkerMetrics = await self._event_loop.run_in_executor(None, self.get_metrics)
                 async with aiohttp.ClientSession() as session:
                     response = await session.put(
-                        url=f'{self._server_url}/api/v1/node_metrics/{str(hash(self._node_details))}',
+                        url=f'{self._server_url}/api/v1/node_metrics/{str(self._node_details)}',
                         data=current_metrics.model_dump_json(),
                         headers={"Content-Type": "application/json"})
                     if response.status != 200:
