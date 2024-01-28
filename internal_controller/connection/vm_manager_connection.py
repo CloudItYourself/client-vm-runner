@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import pathlib
 import random
 import ssl
@@ -29,12 +30,13 @@ class ConnectionHandler:
     TIMEOUT_BEFORE_CLOSE: Final[int] = 10
     TIMEOUT_FOR_AGENT_STARTUP: Final[int] = 10
     KEEPALIVE_REFRESH_TIME_IN_SECONDS: Final[float] = 0.5
+    TAILSCALE_JOIN_DETAILS_FILE_NAME:Final[str] = 'tailscale_params.txt'
 
     def __init__(self, port: int):
         self.stop_event = threading.Event()
         self.loop = asyncio.get_event_loop()
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
-
+        self._tmp_dir = tempfile.TemporaryDirectory()
         self._port = port
         self._process_pool = ProcessPoolExecutor()
 
@@ -72,20 +74,29 @@ class ConnectionHandler:
                     f"Initializing tailscale with status: {'success' if initialization_successful else 'failure'}")
                 registration_details = await self.get_node_join_details()
 
-                logging.info(f"Node registration details received")
+                logging.info(f"Node registration details received.. writing VPN details to file")
 
-                args = ['agent', '--token', registration_details.k8s_token, '--server',
-                        f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
-                        ''.join(random.choices(string.ascii_lowercase, k=16)),
-                        '--node-label',
-                        f'unique-name={str(hash(self.initialization_data.machine_unique_identification))}',
-                        f'--vpn-auth="name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}"']
+                vpn_file = pathlib.Path(self._tmp_dir.name) / ConnectionHandler.TAILSCALE_JOIN_DETAILS_FILE_NAME
+                vpn_file.write_text(f'name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}')
 
-                logging.info(f"Running k3s agent")
+                logging.info(f"Running k3s agent...")
+                print(''.join(['agent', '--token', registration_details.k8s_token, '--server',
+                    f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
+                    ''.join(random.choices(string.ascii_lowercase, k=16)),
+                    '--node-label',
+                    f'unique-name={str(hash(self.initialization_data.machine_unique_identification))}',
+                    f'--vpn-auth-file={vpn_file.absolute()}']))
+
 
                 self._agent_process = await asyncio.create_subprocess_exec(
-                    EnvironmentInstaller.K3S_BINARY_LOCATION, *args, stdout=None,
-                    stderr=None)
+                    EnvironmentInstaller.K3S_BINARY_LOCATION,
+                    'agent', '--token', registration_details.k8s_token, '--server',
+                    f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
+                    ''.join(random.choices(string.ascii_lowercase, k=16)),
+                    '--node-label',
+                    f'unique-name={str(hash(self.initialization_data.machine_unique_identification))}',
+                    f'--vpn-auth-file={vpn_file.absolute()}',
+                    stdout=None, stderr=None)
 
                 if self._agent_process.returncode is None:
                     await self.loop.create_task(self.send_periodic_keepalive())
@@ -101,9 +112,8 @@ class ConnectionHandler:
                     await self.close_comms(websocket)
                     raise Exception(err_msg)
 
-                self._initialization_data = response
                 await websocket.send(
-                    HandshakeResponse(STATUS=HandshakeStatus.SUCCESS, DESCRIPTION="Details received").model_dump_json())
+                    HandshakeResponse(STATUS=HandshakeStatus.SUCCESS, DESCRIPTION="Agent is running").model_dump_json())
                 await self.close_comms(websocket)
                 return
 
