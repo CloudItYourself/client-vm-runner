@@ -65,23 +65,27 @@ class ConnectionHandler:
                     HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Initializing k3s",
                                       SECRET_KEY=response.secret_key).model_dump_json())
 
+                logging.info("Initializing tailscale")
                 initialization_successful = await self.loop.run_in_executor(self._process_pool,
-                                                                            EnvironmentInstaller.download_k3s_agent)
-
-                initialization_successful &= await self.loop.run_in_executor(self._process_pool,
-                                                                             EnvironmentInstaller.install_tailscale)
-
+                                                                            EnvironmentInstaller.install_tailscale)
+                logging.info(
+                    f"Initializing tailscale with status: {'success' if initialization_successful else 'failure'}")
                 registration_details = await self.get_node_join_details()
+
+                logging.info(f"Node registration details received")
 
                 args = ['agent', '--token', registration_details.k8s_token, '--server',
                         f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
                         ''.join(random.choices(string.ascii_lowercase, k=16)),
-                        '--node-label', f'unique-name={str(hash(self.initialization_data.machine_unique_identification))}',
+                        '--node-label',
+                        f'unique-name={str(hash(self.initialization_data.machine_unique_identification))}',
                         f'--vpn-auth="name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}"']
 
+                logging.info(f"Running k3s agent")
+
                 self._agent_process = await asyncio.create_subprocess_exec(
-                    EnvironmentInstaller.K3S_BINARY_LOCATION, *args, stdout=asyncio.subprocess.DEVNULL,
-                    stderr=asyncio.subprocess.DEVNULL)
+                    EnvironmentInstaller.K3S_BINARY_LOCATION, *args, stdout=None,
+                    stderr=None)
 
                 if self._agent_process.returncode is None:
                     await self.loop.create_task(self.send_periodic_keepalive())

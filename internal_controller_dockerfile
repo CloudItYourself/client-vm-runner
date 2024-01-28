@@ -1,7 +1,7 @@
 FROM registry.gitlab.com/ronen48/ciy/python-311:latest
 
 RUN apt-get update -y
-RUN apt install dos2unix iptables -y
+RUN apt install dos2unix iptables wget -y
 COPY internal_controller/ /usr/src/app/internal_controller/
 COPY worker_manager/ /usr/src/app/worker_manager/
 COPY utilities/ /usr/src/app/utilities/
@@ -9,6 +9,8 @@ COPY internal_controller_setup.py /usr/src/app/internal_controller_setup.py
 COPY requirements.txt /usr/src/app/requirements.txt
 
 COPY internal_controller/startup.rc.local /etc/rc.local
+RUN wget -O /usr/local/bin/k3s https://github.com/k3s-io/k3s/releases/download/v1.27.9+k3s1/k3s
+RUN chmod 0777 /usr/local/bin/k3s
 RUN dos2unix /etc/rc.local
 RUN chmod +x /etc/rc.local
 RUN cd /usr/src/app && python3.11 internal_controller_setup.py install

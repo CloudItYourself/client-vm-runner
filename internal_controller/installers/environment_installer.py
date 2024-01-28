@@ -8,21 +8,7 @@ import requests
 
 
 class EnvironmentInstaller:
-    K3S_URL: Final[str] = 'https://github.com/k3s-io/k3s/releases/download/v1.27.9+k3s1/k3s'
     K3S_BINARY_LOCATION: Final[str] = '/usr/local/bin/k3s'
-
-    @staticmethod
-    def download_k3s_agent():
-        if not pathlib.Path(EnvironmentInstaller.K3S_BINARY_LOCATION).exists():
-            try:
-                with requests.get(EnvironmentInstaller.K3S_URL, stream=True) as r:
-                    with open(EnvironmentInstaller.K3S_BINARY_LOCATION, 'wb') as f:
-                        shutil.copyfileobj(r.raw, f)
-                os.chmod(EnvironmentInstaller.K3S_BINARY_LOCATION, 0o755)
-            except requests.exceptions.HTTPError:
-                return False
-        return True
-
     @staticmethod
     def install_tailscale() -> bool:
         if EnvironmentInstaller.check_if_tailscale_is_installed():
