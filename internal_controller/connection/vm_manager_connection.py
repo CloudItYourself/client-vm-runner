@@ -41,7 +41,7 @@ class ConnectionHandler:
 
         self._port = port
         self._process_pool = ProcessPoolExecutor()
-
+        self._node_name = ''
         self._initialization_data = None
         self._client = None
         self._agent_process = None
@@ -85,12 +85,12 @@ class ConnectionHandler:
                 self.loop.create_task(self.send_periodic_keepalive())  # start periodic keepalive
 
                 logging.info(f"Running k3s agent...")
-
+                self._node_name = ''.join(random.choices(string.ascii_lowercase, k=16))
                 self._agent_process = await asyncio.create_subprocess_exec(
                     EnvironmentInstaller.K3S_BINARY_LOCATION,
                     'agent', '--token', registration_details.k8s_token, '--server',
                     f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
-                    ''.join(random.choices(string.ascii_lowercase, k=16)),
+                    self._node_name,
                     '--kubelet-arg', 'cgroups-per-qos=false',
                     '--kubelet-arg', 'enforce-node-allocatable=',
                     '--node-label',
@@ -163,7 +163,7 @@ class ConnectionHandler:
     async def is_node_online(self) -> bool:
         async with aiohttp.ClientSession() as session:
             result = await session.get(
-                url=f'{self.initialization_data.server_url}/api/v1/node_exists/{str(self.initialization_data.machine_unique_identification)}')
+                url=f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}')
             return result.status == 200
 
     def run(self):
