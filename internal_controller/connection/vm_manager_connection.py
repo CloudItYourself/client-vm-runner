@@ -38,7 +38,7 @@ class ConnectionHandler:
         self.loop = asyncio.get_event_loop()
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
         self._tmp_dir = tempfile.TemporaryDirectory()
-
+        self._node_name = ''.join(random.choices(string.ascii_lowercase, k=16))
         self._port = port
         self._process_pool = ProcessPoolExecutor()
         self._initialization_data = None
@@ -89,7 +89,7 @@ class ConnectionHandler:
                     EnvironmentInstaller.K3S_BINARY_LOCATION,
                     'agent', '--token', registration_details.k8s_token, '--server',
                     f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
-                    f'{str(self.initialization_data.machine_unique_identification)}',
+                    self._node_name,
                     f'--vpn-auth-file={vpn_file.absolute()}',
                     stdout=None, stderr=None)
 
@@ -150,15 +150,16 @@ class ConnectionHandler:
     async def send_periodic_keepalive(self):
         while True:
             async with aiohttp.ClientSession() as session:
-                await session.put(url=f'{self.initialization_data.server_url}/api/v1/node_keepalive',
-                                  json=self.initialization_data.machine_unique_identification.model_dump(),
-                                  headers={"Content-Type": "application/json"})
+                await session.put(
+                    url=f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}',
+                    json=self._initialization_data.machine_unique_identification.model_dump(),
+                    headers={"Content-Type": "application/json"})
             await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
     async def is_node_online(self) -> bool:
         async with aiohttp.ClientSession() as session:
             result = await session.get(
-                url=f'{self.initialization_data.server_url}/api/v1/node_exists/{str(self._initialization_data.machine_unique_identification)}')
+                url=f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}')
             return result.status == 200
 
     def run(self):
