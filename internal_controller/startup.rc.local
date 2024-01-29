@@ -10,5 +10,8 @@
 # bits.
 #
 # By default, this script does nothing.
+chmod 0777 /etc/resolv.conf
+echo nameserver 1.1.1.1 >> /etc/resolv.conf
+echo nameserver 1.0.0.1 >> /etc/resolv.conf
 /usr/bin/python3.11 /usr/src/app/internal_controller/main.py &
 exit 0

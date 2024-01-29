@@ -84,6 +84,7 @@ class ConnectionHandler:
                 self.loop.create_task(self.send_periodic_keepalive())  # start periodic keepalive
 
                 logging.info(f"Running k3s agent...")
+                os.system('rm -f /etc/rancher/node/password')
                 self._agent_process = await asyncio.create_subprocess_exec(
                     EnvironmentInstaller.K3S_BINARY_LOCATION,
                     'agent', '--token', registration_details.k8s_token, '--server',
