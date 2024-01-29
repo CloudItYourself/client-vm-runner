@@ -1,0 +1,6 @@
+label: dos
+label-id: 0x6332766d
+device: linux.img
+unit: sectors
+
+linux.img1 : start=2048, size=2097152, type=83, bootable
