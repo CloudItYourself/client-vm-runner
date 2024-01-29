@@ -28,7 +28,8 @@ from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeRece
 class ConnectionHandler:
     CONNECTION_PATH: Final[str] = 'vm_connection'
     TIMEOUT_BEFORE_CLOSE: Final[int] = 10
-    TIMEOUT_FOR_AGENT_STARTUP: Final[int] = 10
+    TIMEOUT_BETWEEN_NODE_CHECKS: Final[int] = 10
+    NODE_CHECK_RETRY_COUNT: Final[int] = 10
     KEEPALIVE_REFRESH_TIME_IN_SECONDS: Final[float] = 0.5
     TAILSCALE_JOIN_DETAILS_FILE_NAME: Final[str] = 'tailscale_params.txt'
 
@@ -37,6 +38,7 @@ class ConnectionHandler:
         self.loop = asyncio.get_event_loop()
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
         self._tmp_dir = tempfile.TemporaryDirectory()
+
         self._port = port
         self._process_pool = ProcessPoolExecutor()
 
@@ -80,6 +82,8 @@ class ConnectionHandler:
                 vpn_file.write_text(
                     f'name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}')
 
+                self.loop.create_task(self.send_periodic_keepalive())  # start periodic keepalive
+
                 logging.info(f"Running k3s agent...")
 
                 self._agent_process = await asyncio.create_subprocess_exec(
@@ -87,19 +91,14 @@ class ConnectionHandler:
                     'agent', '--token', registration_details.k8s_token, '--server',
                     f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
                     ''.join(random.choices(string.ascii_lowercase, k=16)),
-                    '--kubelet-arg','cgroups-per-qos=false',
+                    '--kubelet-arg', 'cgroups-per-qos=false',
                     '--kubelet-arg', 'enforce-node-allocatable=',
                     '--node-label',
                     f'unique-name={str(self.initialization_data.machine_unique_identification)}',
                     f'--vpn-auth-file={vpn_file.absolute()}',
                     stdout=None, stderr=None)
 
-                if self._agent_process.returncode is None:
-                    self.loop.create_task(self.send_periodic_keepalive())
-
-                await asyncio.sleep(ConnectionHandler.TIMEOUT_FOR_AGENT_STARTUP)
-
-                initialization_successful &= self._agent_process.returncode is None
+                initialization_successful = self._agent_process.returncode is None and await self.wait_for_node_connection()
 
                 if not initialization_successful:
                     err_msg = 'Failed to initialize installers.. terminating'
@@ -135,6 +134,13 @@ class ConnectionHandler:
         async with serve(self.initial_handshake_handler, "0.0.0.0", self._port):
             await self.stop
 
+    async def wait_for_node_connection(self):
+        for i in range(ConnectionHandler.NODE_CHECK_RETRY_COUNT):
+            if await self.is_node_online():
+                return True
+            await asyncio.sleep(ConnectionHandler.TIMEOUT_BETWEEN_NODE_CHECKS)
+        return False
+
     async def connect_to_server(self):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
 
@@ -154,6 +160,12 @@ class ConnectionHandler:
                                   headers={"Content-Type": "application/json"})
             await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
+    async def is_node_online(self) -> bool:
+        async with aiohttp.ClientSession() as session:
+            result = await session.get(
+                url=f'{self.initialization_data.server_url}/api/v1/node_exists/{str(self.initialization_data.machine_unique_identification)}')
+            return result.status == 200
+
     def run(self):
         self.loop.run_until_complete(self.run_until_handshake_complete())
         self.loop.run_until_complete(self.connect_to_server())
@@ -161,7 +173,9 @@ class ConnectionHandler:
 
         while True:
             if self._agent_process.returncode is not None:
-                self.loop.run_until_complete(self.close_comms(self._client))
+                return
+
+            if self.loop.run_until_complete(self.is_node_online()) is False:
                 return
 
             self.loop.run_until_complete(asyncio.sleep(1))
