@@ -12,6 +12,8 @@ COPY internal_controller/startup.rc.local /etc/rc.local
 RUN wget -O /usr/local/bin/k3s https://github.com/k3s-io/k3s/releases/download/v1.27.9+k3s1/k3s
 RUN chmod 0777 /usr/local/bin/k3s
 RUN dos2unix /etc/rc.local
+RUN echo INVOCATION_ID= >> /etc/default/k3s.env
+RUN chmod 0777 /etc/default/k3s.env
 RUN chmod +x /etc/rc.local
 RUN cd /usr/src/app && python3.11 internal_controller_setup.py install
 RUN pip3 install --extra-index-url=https://ci-python-package-user:glpat-3zqVQwKxwU_Qsvc_8fw8@gitlab.com/api/v4/projects/54080196/packages/pypi/simple -r /usr/src/app/requirements.txt

@@ -22,7 +22,7 @@ class MetricsDistribution:
         self._logger = logging.getLogger(LOGGER_NAME)
         self._internal_comms_handler = internal_comms_handler
         self._should_terminate = False
-        self._event_loop = asyncio.get_running_loop()
+        self._event_loop = asyncio.new_event_loop()
         self._should_terminate = False
 
     def get_metrics(self):
