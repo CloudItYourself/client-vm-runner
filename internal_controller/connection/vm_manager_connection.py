@@ -95,7 +95,7 @@ class ConnectionHandler:
                     stdout=None, stderr=None)
 
                 if self._agent_process.returncode is None:
-                    await self.loop.create_task(self.send_periodic_keepalive())
+                    self.loop.create_task(self.send_periodic_keepalive())
 
                 await asyncio.sleep(ConnectionHandler.TIMEOUT_FOR_AGENT_STARTUP)
 
