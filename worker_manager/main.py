@@ -17,14 +17,15 @@ async def maintenance_loop(internal_vm_comms: InternalControllerComms, metrics_r
             sys.exit(-1)
         if metrics_reporter.should_terminate():
             logging.getLogger(LOGGER_NAME).critical("Metrics report error: terminating")
-            internal_vm_comms.terminate()
-            sys.exit(-1)
+            # internal_vm_comms.terminate()
+            # sys.exit(-1)
         await asyncio.sleep(5)
 
 
 def main():
     config = ConfigurationManager()
     event_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(event_loop)
     initialize_logger(LOGGER_NAME)
     internal_vm_comms = InternalControllerComms(core_count=config.config.cpu_limit,
                                                 memory_size=config.config.memory_limit,
