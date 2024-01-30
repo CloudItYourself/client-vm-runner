@@ -4,11 +4,13 @@ import logging
 import os
 import pathlib
 import random
+import ssl
 import string
 import tempfile
 import threading
 
 import aiohttp
+import websockets
 from ciy_backend_libraries.api.cluster_access.v1.node_registrar import RegistrationDetails
 
 from internal_controller.installers.environment_installer import EnvironmentInstaller
@@ -43,6 +45,16 @@ class ConnectionHandler:
         self._client = None
         self._agent_process = None
 
+    async def connect_to_server(self):
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_file = (pathlib.Path(tmpdir) / 'cert.pem')
+            cert_file.write_bytes(self.initialization_data.secret_key)
+            ssl_context.load_verify_locations(cert_file.absolute())
+        self._client = await websockets.connect(
+            f"wss://{self._initialization_data.ip}:{self._initialization_data.port}/{ConnectionHandler.CONNECTION_PATH}",
+            ssl=ssl_context)
     @property
     def initialization_data(self) -> HandshakeReceptionMessage:
         return self._initialization_data
@@ -150,9 +162,7 @@ class ConnectionHandler:
         while True:
             async with aiohttp.ClientSession() as session:
                 await session.put(
-                    url=f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}',
-                    json=self._initialization_data.machine_unique_identification.model_dump(),
-                    headers={"Content-Type": "application/json"})
+                    url=f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
             await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
     async def is_node_online(self) -> bool:
@@ -163,6 +173,7 @@ class ConnectionHandler:
 
     def run(self):
         self.loop.run_until_complete(self.run_until_handshake_complete())
+        self.loop.run_until_complete(self.connect_to_server())
         print("Connection accepted")
 
         while True:
