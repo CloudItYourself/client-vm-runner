@@ -35,7 +35,8 @@ class ConnectionHandler:
 
     def __init__(self, port: int):
         self.stop_event = threading.Event()
-        self.loop = asyncio.get_event_loop()
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
         self._tmp_dir = tempfile.TemporaryDirectory()
         self._node_name = ''.join(random.choices(string.ascii_lowercase, k=16))
