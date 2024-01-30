@@ -84,6 +84,15 @@ class ConnectionHandler:
                 logging.info(f"Running k3s agent...")
                 os.system('rm -f /etc/rancher/node/password')
                 os.environ['INVOCATION_ID'] = ""
+
+                if not os.system(
+                    f'tailscale up --authkey={registration_details.vpn_token} --login-server=http://{registration_details.vpn_ip}:{registration_details.vpn_port}') == 0:
+                    err_msg = 'Failed to initialize tailscale.. terminating'
+                    await websocket.send(
+                        HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg).model_dump_json())
+                    await self.close_comms(websocket)
+                    raise Exception(err_msg)
+
                 self._agent_process = await asyncio.create_subprocess_exec(
                     EnvironmentInstaller.K3S_BINARY_LOCATION,
                     'agent', '--token', registration_details.k8s_token, '--server',
