@@ -88,7 +88,7 @@ class ConnectionHandler:
                     EnvironmentInstaller.K3S_BINARY_LOCATION,
                     'agent', '--token', registration_details.k8s_token, '--server',
                     f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
-                    self._node_name,
+                    self._node_name, '--flannel-iface', 'tailscale0',
                     '--kubelet-arg', 'cgroups-per-qos=false',
                     '--kubelet-arg', 'enforce-node-allocatable=',
                     f'--vpn-auth-file={vpn_file.absolute()}',
