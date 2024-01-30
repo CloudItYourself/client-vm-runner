@@ -6,7 +6,7 @@ from typing import Final
 import aiohttp
 import psutil
 from ciy_backend_libraries.api.cluster_access.v1.node_registrar import NodeDetails
-from ciy_backend_libraries.messaging.main_server_to_worker_manager import WorkerMetrics
+from ciy_backend_libraries.api.scheduling.v1.metrics_report import WorkerMetrics
 
 from worker_manager import LOGGER_NAME
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms

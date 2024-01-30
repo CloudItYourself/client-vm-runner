@@ -85,11 +85,14 @@ class ConnectionHandler:
 
                 logging.info(f"Running k3s agent...")
                 os.system('rm -f /etc/rancher/node/password')
+                os.environ['INVOCATION_ID'] = ""
                 self._agent_process = await asyncio.create_subprocess_exec(
                     EnvironmentInstaller.K3S_BINARY_LOCATION,
                     'agent', '--token', registration_details.k8s_token, '--server',
                     f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
                     self._node_name,
+                    '--kubelet-arg', 'cgroups-per-qos=false',
+                    '--kubelet-arg', 'enforce-node-allocatable=',
                     f'--vpn-auth-file={vpn_file.absolute()}',
                     stdout=None, stderr=None)
 
