@@ -4,13 +4,11 @@ import logging
 import os
 import pathlib
 import random
-import ssl
 import string
 import tempfile
 import threading
 
 import aiohttp
-import websockets
 from ciy_backend_libraries.api.cluster_access.v1.node_registrar import RegistrationDetails
 
 from internal_controller.installers.environment_installer import EnvironmentInstaller
@@ -139,17 +137,6 @@ class ConnectionHandler:
             await asyncio.sleep(ConnectionHandler.TIMEOUT_BETWEEN_NODE_CHECKS)
         return False
 
-    async def connect_to_server(self):
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            cert_file = (pathlib.Path(tmpdir) / 'cert.pem')
-            cert_file.write_bytes(self.initialization_data.secret_key)
-            ssl_context.load_verify_locations(cert_file.absolute())
-        self._client = await websockets.connect(
-            f"wss://{self._initialization_data.ip}:{self._initialization_data.port}/{ConnectionHandler.CONNECTION_PATH}",
-            ssl=ssl_context)
-
     async def send_periodic_keepalive(self):
         while True:
             async with aiohttp.ClientSession() as session:
@@ -167,7 +154,6 @@ class ConnectionHandler:
 
     def run(self):
         self.loop.run_until_complete(self.run_until_handshake_complete())
-        self.loop.run_until_complete(self.connect_to_server())
         print("Connection accepted")
 
         while True:

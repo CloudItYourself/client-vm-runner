@@ -1,10 +1,8 @@
 import os
 import pathlib
-import shutil
 import tarfile
 from tempfile import TemporaryDirectory
 from typing import Final
-import requests
 
 
 class EnvironmentInstaller:
