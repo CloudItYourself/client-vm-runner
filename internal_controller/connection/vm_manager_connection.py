@@ -28,8 +28,8 @@ from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeRece
 class ConnectionHandler:
     CONNECTION_PATH: Final[str] = 'vm_connection'
     TIMEOUT_BEFORE_CLOSE: Final[int] = 10
-    TIMEOUT_BETWEEN_NODE_CHECKS: Final[int] = 5
-    NODE_CHECK_RETRY_COUNT: Final[int] = 30
+    TIMEOUT_BETWEEN_NODE_CHECKS: Final[int] = 2
+    NODE_CHECK_INITIAL_TIMEOUT: Final[int] = 300
     KEEPALIVE_REFRESH_TIME_IN_SECONDS: Final[float] = 0.5
     TAILSCALE_JOIN_DETAILS_FILE_NAME: Final[str] = 'tailscale_params.txt'
 
@@ -156,8 +156,8 @@ class ConnectionHandler:
         async with serve(self.initial_handshake_handler, "0.0.0.0", self._port):
             await self.stop
 
-    async def check_for_node_connection(self):
-        for i in range(ConnectionHandler.NODE_CHECK_RETRY_COUNT):
+    async def check_for_node_connection(self, timeout_in_seconds = NODE_CHECK_INITIAL_TIMEOUT):
+        for i in range(int(timeout_in_seconds / ConnectionHandler.TIMEOUT_BETWEEN_NODE_CHECKS)):
             if await self.is_node_online():
                 return True
             await asyncio.sleep(ConnectionHandler.TIMEOUT_BETWEEN_NODE_CHECKS)
@@ -165,16 +165,23 @@ class ConnectionHandler:
 
     async def send_periodic_keepalive(self):
         while True:
-            async with aiohttp.ClientSession() as session:
-                await session.put(
-                    url=f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
+            try:
+                async with aiohttp.ClientSession() as session:
+                    await session.put(
+                        url=f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
+            except Exception as e:
+                print(f"Failed to send keepalive...: {e}")
             await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
     async def is_node_online(self) -> bool:
-        async with aiohttp.ClientSession() as session:
-            result = await session.get(
-                url=f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}')
-            return result.status == 200
+        try:
+            async with aiohttp.ClientSession() as session:
+                result = await session.get(
+                    url=f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}')
+                return result.status == 200
+        except Exception as e:
+            print(f"Failed to send node_exists...: {e}")
+            return False
 
     async def main_loop(self):
         await self.run_until_handshake_complete()
@@ -182,7 +189,7 @@ class ConnectionHandler:
         print("Connection accepted")
 
         while True:
-            if await self.check_for_node_connection() is False:
+            if await self.check_for_node_connection(10) is False:
                 print("Exiting.. node not online")
                 return
 

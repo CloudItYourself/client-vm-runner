@@ -40,18 +40,18 @@ class MetricsDistribution:
 
     async def periodically_publish_details(self):
         while True:
-            try:
-                current_metrics: WorkerMetrics = await self._event_loop.run_in_executor(None, self.get_metrics)
-                async with aiohttp.ClientSession() as session:
-                    response = await session.put(
-                        url=f'{self._server_url}/api/v1/node_metrics/{str(self._node_details)}',
-                        data=current_metrics.model_dump_json(),
-                        headers={"Content-Type": "application/json"})
-                    if response.status != 200:
-                        raise RuntimeError("Node keepalive failed!")
-            except Exception as e:
-                self._logger.error(f"Unexpected error: {e}.... terminating")
-                self._should_terminate = True
+            # try:
+            #     current_metrics: WorkerMetrics = await self._event_loop.run_in_executor(None, self.get_metrics)
+            #     async with aiohttp.ClientSession() as session:
+            #         response = await session.put(
+            #             url=f'{self._server_url}/api/v1/node_metrics/{str(self._node_details)}',
+            #             data=current_metrics.model_dump_json(),
+            #             headers={"Content-Type": "application/json"})
+            #         if response.status != 200:
+            #             raise RuntimeError("Node keepalive failed!")
+            # except Exception as e:
+            #     self._logger.error(f"Unexpected error: {e}.... terminating")
+            #     self._should_terminate = True
 
             await asyncio.sleep(MetricsDistribution.INTERVAL_BETWEEN_METRICS_IN_SEC)
 
