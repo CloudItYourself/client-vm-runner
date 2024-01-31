@@ -28,8 +28,8 @@ from utilities.messages import HandshakeResponse, HandshakeStatus, HandshakeRece
 class ConnectionHandler:
     CONNECTION_PATH: Final[str] = 'vm_connection'
     TIMEOUT_BEFORE_CLOSE: Final[int] = 10
-    TIMEOUT_BETWEEN_NODE_CHECKS: Final[int] = 10
-    NODE_CHECK_RETRY_COUNT: Final[int] = 10
+    TIMEOUT_BETWEEN_NODE_CHECKS: Final[int] = 5
+    NODE_CHECK_RETRY_COUNT: Final[int] = 30
     KEEPALIVE_REFRESH_TIME_IN_SECONDS: Final[float] = 0.5
     TAILSCALE_JOIN_DETAILS_FILE_NAME: Final[str] = 'tailscale_params.txt'
 
@@ -68,6 +68,16 @@ class ConnectionHandler:
                                           data=self.initialization_data.machine_unique_identification.model_dump_json(),
                                           headers={"Content-Type": "application/json"})
             return RegistrationDetails(**await response.json())
+
+    @staticmethod
+    def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails, vpn_file: pathlib.Path):
+        os.system(' '.join([EnvironmentInstaller.K3S_BINARY_LOCATION,
+                            'agent', '--token', registration_details.k8s_token, '--server',
+                            f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
+                            node_name, '--flannel-iface', 'tailscale0',
+                            '--kubelet-arg', 'cgroups-per-qos=false',
+                            '--kubelet-arg', 'enforce-node-allocatable=',
+                            f'--vpn-auth-file={vpn_file.absolute()}']))
 
     async def initial_handshake_handler(self, websocket, path):
         while True:
@@ -109,17 +119,9 @@ class ConnectionHandler:
                     await self.close_comms(websocket)
                     raise Exception(err_msg)
 
-                self._agent_process = await asyncio.create_subprocess_exec(
-                    EnvironmentInstaller.K3S_BINARY_LOCATION,
-                    'agent', '--token', registration_details.k8s_token, '--server',
-                    f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
-                    self._node_name, '--flannel-iface', 'tailscale0',
-                    '--kubelet-arg', 'cgroups-per-qos=false',
-                    '--kubelet-arg', 'enforce-node-allocatable=',
-                    f'--vpn-auth-file={vpn_file.absolute()}',
-                    stdout=None, stderr=None)
+                self._agent_process = self.loop.run_in_executor(self._process_pool, ConnectionHandler, self._node_name, registration_details, vpn_file)
 
-                initialization_successful = self._agent_process.returncode is None and await self.wait_for_node_connection()
+                initialization_successful = await self.check_for_node_connection()
 
                 if not initialization_successful:
                     err_msg = 'Failed to initialize installers.. terminating'
@@ -155,7 +157,7 @@ class ConnectionHandler:
         async with serve(self.initial_handshake_handler, "0.0.0.0", self._port):
             await self.stop
 
-    async def wait_for_node_connection(self):
+    async def check_for_node_connection(self):
         for i in range(ConnectionHandler.NODE_CHECK_RETRY_COUNT):
             if await self.is_node_online():
                 return True
@@ -181,10 +183,8 @@ class ConnectionHandler:
         print("Connection accepted")
 
         while True:
-            if self._agent_process.returncode is not None:
-                return
-
-            if await self.is_node_online() is False:
+            if await self.check_for_node_connection() is False:
+                print("Exiting.. node not online")
                 return
 
             await asyncio.sleep(1)
