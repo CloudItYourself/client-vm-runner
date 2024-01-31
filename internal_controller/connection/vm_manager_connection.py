@@ -119,7 +119,7 @@ class ConnectionHandler:
                     await self.close_comms(websocket)
                     raise Exception(err_msg)
 
-                self._agent_process = self.loop.run_in_executor(self._process_pool, ConnectionHandler, self._node_name, registration_details, vpn_file)
+                self._agent_process = self.loop.run_in_executor(self._process_pool, ConnectionHandler.run_k3s_agent_in_background, self._node_name, registration_details, vpn_file)
 
                 initialization_successful = await self.check_for_node_connection()
 
