@@ -71,6 +71,7 @@ class ConnectionHandler:
 
     @staticmethod
     def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails, vpn_file: pathlib.Path):
+        os.environ['INVOCATION_ID'] = ""
         os.system(' '.join([EnvironmentInstaller.K3S_BINARY_LOCATION,
                             'agent', '--token', registration_details.k8s_token, '--server',
                             f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
@@ -109,8 +110,6 @@ class ConnectionHandler:
 
                 logging.info(f"Running k3s agent...")
                 os.system('rm -f /etc/rancher/node/password')
-                os.environ['INVOCATION_ID'] = ""
-
                 if not os.system(
                         f'tailscale up --authkey={registration_details.vpn_token} --login-server=http://{registration_details.vpn_ip}:{registration_details.vpn_port}') == 0:
                     err_msg = 'Failed to initialize tailscale.. terminating'
