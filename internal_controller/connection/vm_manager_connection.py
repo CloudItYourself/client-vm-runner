@@ -42,6 +42,7 @@ class ConnectionHandler:
         self._node_name = ''.join(random.choices(string.ascii_lowercase, k=16))
         self._port = port
         self._process_pool = ProcessPoolExecutor()
+        self._background_keepalive_task = None
         self._initialization_data = None
         self._client = None
         self._agent_process = None
@@ -56,6 +57,7 @@ class ConnectionHandler:
         self._client = await websockets.connect(
             f"wss://{self._initialization_data.ip}:{self._initialization_data.port}/{ConnectionHandler.CONNECTION_PATH}",
             ssl=ssl_context)
+
     @property
     def initialization_data(self) -> HandshakeReceptionMessage:
         return self._initialization_data
@@ -92,14 +94,15 @@ class ConnectionHandler:
                 vpn_file.write_text(
                     f'name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}')
 
-                self.loop.create_task(self.send_periodic_keepalive())  # start periodic keepalive
+                self._background_keepalive_task = self.loop.create_task(
+                    self.send_periodic_keepalive())  # start periodic keepalive
 
                 logging.info(f"Running k3s agent...")
                 os.system('rm -f /etc/rancher/node/password')
                 os.environ['INVOCATION_ID'] = ""
 
                 if not os.system(
-                    f'tailscale up --authkey={registration_details.vpn_token} --login-server=http://{registration_details.vpn_ip}:{registration_details.vpn_port}') == 0:
+                        f'tailscale up --authkey={registration_details.vpn_token} --login-server=http://{registration_details.vpn_ip}:{registration_details.vpn_port}') == 0:
                     err_msg = 'Failed to initialize tailscale.. terminating'
                     await websocket.send(
                         HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg).model_dump_json())
@@ -172,16 +175,19 @@ class ConnectionHandler:
                 url=f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}')
             return result.status == 200
 
-    def run(self):
-        self.loop.run_until_complete(self.run_until_handshake_complete())
-        self.loop.run_until_complete(self.connect_to_server())
+    async def main_loop(self):
+        await self.run_until_handshake_complete()
+        await self.connect_to_server()
         print("Connection accepted")
 
         while True:
             if self._agent_process.returncode is not None:
                 return
 
-            if self.loop.run_until_complete(self.is_node_online()) is False:
+            if await self.is_node_online() is False:
                 return
 
-            self.loop.run_until_complete(asyncio.sleep(1))
+            await asyncio.sleep(1)
+
+    def run(self):
+        self.loop.run_until_complete(self.main_loop())
