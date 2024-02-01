@@ -69,14 +69,14 @@ class ConnectionHandler:
             return RegistrationDetails(**await response.json())
 
     @staticmethod
-    def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails, vpn_file: pathlib.Path):
+    def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails, vpn_file: pathlib.Path) -> bool:
         os.environ['INVOCATION_ID'] = ""
         os.system('/usr/local/bin/k3s-agent-uninstall.sh')
         agent_installation_command = (f'INSTALL_K3S_EXEC="agent --token {registration_details.k8s_token}'
          f' --server https://{registration_details.k8s_ip}:{registration_details.k8s_port}'
          f'--node-name {node_name} --kubelet-arg cgroups-per-qos=false --kubelet-arg enforce-node-allocatable='
          f' --vpn-auth-file={vpn_file.absolute()}" ./install.sh')
-        os.system(agent_installation_command)
+        return os.system(agent_installation_command) == 0
 
     async def initial_handshake_handler(self, websocket, path):
         while True:
