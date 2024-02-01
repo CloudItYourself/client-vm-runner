@@ -6,7 +6,8 @@ from typing import Final
 
 
 class EnvironmentInstaller:
-    K3S_BINARY_LOCATION: Final[str] = '/usr/local/bin/k3s'
+    K3S_SH_SCRIPT_LOCATION: Final[str] = '/usr/local/src/install.sh'
+
     @staticmethod
     def install_tailscale() -> bool:
         if EnvironmentInstaller.check_if_tailscale_is_installed():

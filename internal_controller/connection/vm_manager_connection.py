@@ -45,7 +45,6 @@ class ConnectionHandler:
         self._background_keepalive_task = None
         self._initialization_data = None
         self._client = None
-        self._agent_process = None
 
     async def connect_to_server(self):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -72,13 +71,12 @@ class ConnectionHandler:
     @staticmethod
     def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails, vpn_file: pathlib.Path):
         os.environ['INVOCATION_ID'] = ""
-        os.system(' '.join([EnvironmentInstaller.K3S_BINARY_LOCATION,
-                            'agent', '--token', registration_details.k8s_token, '--server',
-                            f'https://{registration_details.k8s_ip}:{registration_details.k8s_port}', '--node-name',
-                            node_name, '--flannel-iface', 'tailscale0',
-                            '--kubelet-arg', 'cgroups-per-qos=false',
-                            '--kubelet-arg', 'enforce-node-allocatable=',
-                            f'--vpn-auth-file={vpn_file.absolute()}']))
+        os.system('/usr/local/bin/k3s-agent-uninstall.sh')
+        agent_installation_command = (f'INSTALL_K3S_EXEC="agent --token {registration_details.k8s_token}'
+         f' --server https://{registration_details.k8s_ip}:{registration_details.k8s_port}'
+         f'--node-name {node_name} --kubelet-arg cgroups-per-qos=false --kubelet-arg enforce-node-allocatable='
+         f' --vpn-auth-file={vpn_file.absolute()}" ./install.sh')
+        os.system(agent_installation_command)
 
     async def initial_handshake_handler(self, websocket, path):
         while True:
@@ -103,24 +101,15 @@ class ConnectionHandler:
 
                 vpn_file = pathlib.Path(self._tmp_dir.name) / ConnectionHandler.TAILSCALE_JOIN_DETAILS_FILE_NAME
                 vpn_file.write_text(
-                    f'name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=http://{registration_details.vpn_ip}:{registration_details.vpn_port}')
+                    f'name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=https://{registration_details.vpn_ip}:{registration_details.vpn_port}')
 
                 self._background_keepalive_task = self.loop.create_task(
                     self.send_periodic_keepalive())  # start periodic keepalive
 
                 logging.info(f"Running k3s agent...")
-                os.system('rm -f /etc/rancher/node/password')
-                if not os.system(
-                        f'tailscale up --authkey={registration_details.vpn_token} --login-server=http://{registration_details.vpn_ip}:{registration_details.vpn_port}') == 0:
-                    err_msg = 'Failed to initialize tailscale.. terminating'
-                    await websocket.send(
-                        HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg).model_dump_json())
-                    await self.close_comms(websocket)
-                    raise Exception(err_msg)
+                script_installation_res = await self.loop.run_in_executor(self._process_pool, ConnectionHandler.run_k3s_agent_in_background, self._node_name, registration_details, vpn_file)
 
-                self._agent_process = self.loop.run_in_executor(self._process_pool, ConnectionHandler.run_k3s_agent_in_background, self._node_name, registration_details, vpn_file)
-
-                initialization_successful = await self.check_for_node_connection()
+                initialization_successful = script_installation_res and await self.check_for_node_connection()
 
                 if not initialization_successful:
                     err_msg = 'Failed to initialize installers.. terminating'
