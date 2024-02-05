@@ -69,14 +69,27 @@ class ConnectionHandler:
             return RegistrationDetails(**await response.json())
 
     @staticmethod
-    def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails, vpn_file: pathlib.Path) -> bool:
+    def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails,
+                                    vpn_file: pathlib.Path) -> bool:
         os.environ['INVOCATION_ID'] = ""
-        os.system('/usr/local/bin/k3s-agent-uninstall.sh')
+        k3s_uninstall = pathlib.Path('/usr/local/bin/k3s-agent-uninstall.sh')
+        if k3s_uninstall.exists():
+            k3s_path = pathlib.Path('/usr/local/bin/k3s')
 
-        agent_installation_command = (f'INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_EXEC="agent --token {registration_details.k8s_token}'
-         f' --server https://{registration_details.k8s_ip}:{registration_details.k8s_port}'
-         f' --node-name {node_name} --kubelet-arg cgroups-per-qos=false --kubelet-arg enforce-node-allocatable='
-         f' --vpn-auth-file={vpn_file.absolute()}" /usr/local/src/install.sh')
+            k3s_temp_path = pathlib.Path('/usr/local/bin/k3s_temp')
+            k3s_temp_path.write_bytes(k3s_path.read_bytes())
+
+            os.system('/usr/local/bin/k3s-agent-uninstall.sh')
+
+            k3s_path.write_bytes(k3s_temp_path.read_bytes())
+            k3s_temp_path.unlink()
+            k3s_path.chmod(0o777)
+
+        agent_installation_command = (
+            f'INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_EXEC="agent --token {registration_details.k8s_token}'
+            f' --server https://{registration_details.k8s_ip}:{registration_details.k8s_port}'
+            f' --node-name {node_name} --kubelet-arg cgroups-per-qos=false --kubelet-arg enforce-node-allocatable='
+            f' --vpn-auth-file={vpn_file.absolute()}" /usr/local/src/install.sh')
         return os.system(agent_installation_command) == 0
 
     async def initial_handshake_handler(self, websocket, path):
@@ -108,7 +121,10 @@ class ConnectionHandler:
                     self.send_periodic_keepalive())  # start periodic keepalive
 
                 logging.info(f"Running k3s agent...")
-                script_installation_res = await self.loop.run_in_executor(self._process_pool, ConnectionHandler.run_k3s_agent_in_background, self._node_name, registration_details, vpn_file)
+                script_installation_res = await self.loop.run_in_executor(self._process_pool,
+                                                                          ConnectionHandler.run_k3s_agent_in_background,
+                                                                          self._node_name, registration_details,
+                                                                          vpn_file)
 
                 initialization_successful = script_installation_res and await self.check_for_node_connection()
 
@@ -146,7 +162,7 @@ class ConnectionHandler:
         async with serve(self.initial_handshake_handler, "0.0.0.0", self._port):
             await self.stop
 
-    async def check_for_node_connection(self, timeout_in_seconds = NODE_CHECK_INITIAL_TIMEOUT):
+    async def check_for_node_connection(self, timeout_in_seconds=NODE_CHECK_INITIAL_TIMEOUT):
         for i in range(int(timeout_in_seconds / ConnectionHandler.TIMEOUT_BETWEEN_NODE_CHECKS)):
             if await self.is_node_online():
                 return True
