@@ -14,8 +14,6 @@ RUN wget -O /usr/local/bin/k3s https://github.com/k3s-io/k3s/releases/download/v
 RUN wget -O /usr/local/src/install.sh https://get.k3s.io/
 RUN chmod 0777 /usr/local/src/install.sh
 RUN chmod 0777 /usr/local/bin/k3s
-RUN echo INVOCATION_ID= >> /etc/default/k3s.env
-RUN chmod 0777 /etc/default/k3s.env
 
 RUN dos2unix /etc/rc.local
 RUN chmod +x /etc/rc.local

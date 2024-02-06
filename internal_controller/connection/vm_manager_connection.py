@@ -38,7 +38,6 @@ class ConnectionHandler:
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
-        self._tmp_dir = tempfile.TemporaryDirectory()
         self._node_name = ''.join(random.choices(string.ascii_lowercase, k=16))
         self._port = port
         self._process_pool = ProcessPoolExecutor()
@@ -69,8 +68,7 @@ class ConnectionHandler:
             return RegistrationDetails(**await response.json())
 
     @staticmethod
-    def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails,
-                                    vpn_file: pathlib.Path) -> bool:
+    def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails) -> bool:
         os.environ['INVOCATION_ID'] = ""
         k3s_uninstall = pathlib.Path('/usr/local/bin/k3s-agent-uninstall.sh')
         if k3s_uninstall.exists():
@@ -86,11 +84,16 @@ class ConnectionHandler:
             k3s_path.chmod(0o777)
 
         agent_installation_command = (
-            f'INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_EXEC="agent --token {registration_details.k8s_token}'
+            f'INSTALL_K3S_SKIP_START=true INSTALL_K3S_SKIP_DOWNLOAD=true INSTALL_K3S_EXEC="agent --token {registration_details.k8s_token}'
             f' --server https://{registration_details.k8s_ip}:{registration_details.k8s_port}'
             f' --node-name {node_name} --kubelet-arg cgroups-per-qos=false --kubelet-arg enforce-node-allocatable='
-            f' --vpn-auth-file={vpn_file.absolute()}" /usr/local/src/install.sh')
-        return os.system(agent_installation_command) == 0
+            f' --vpn-auth="name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=https://{registration_details.vpn_ip}:{registration_details.vpn_port}"" /usr/local/src/install.sh')
+
+        success_status = os.system(agent_installation_command) == 0
+        k3s_env_file = pathlib.Path("/etc/systemd/system/k3s-agent.service.env")
+        k3s_env_file.write_text("INVOCATION_ID= \n")
+        k3s_env_file.chmod(0o777)
+        return success_status and os.system('systemctl start k3s-agent') == 0
 
     async def initial_handshake_handler(self, websocket, path):
         while True:
@@ -113,18 +116,13 @@ class ConnectionHandler:
 
                 logging.info(f"Node registration details received.. writing VPN details to file")
 
-                vpn_file = pathlib.Path(self._tmp_dir.name) / ConnectionHandler.TAILSCALE_JOIN_DETAILS_FILE_NAME
-                vpn_file.write_text(
-                    f'name=tailscale,joinKey={registration_details.vpn_token},controlServerURL=https://{registration_details.vpn_ip}:{registration_details.vpn_port}')
-
                 self._background_keepalive_task = self.loop.create_task(
                     self.send_periodic_keepalive())  # start periodic keepalive
 
                 logging.info(f"Running k3s agent...")
                 script_installation_res = await self.loop.run_in_executor(self._process_pool,
                                                                           ConnectionHandler.run_k3s_agent_in_background,
-                                                                          self._node_name, registration_details,
-                                                                          vpn_file)
+                                                                          self._node_name, registration_details)
 
                 initialization_successful = script_installation_res and await self.check_for_node_connection()
 
