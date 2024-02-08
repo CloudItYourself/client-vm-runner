@@ -51,17 +51,11 @@ jobs:
             RAND=$(openssl rand -base64  32)
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --privileged -v "$PWD":/d2vm -w /d2vm linkacloud/d2vm:latest convert registry.gitlab.com/ronen48/ciy/cloud-iy-vm:latest -o ciy.qcow2 -p $RAND
 
-      - name: Build external_controller
-        run: python setup.py install
-
-      - name: Build external_application
-        run: nuitka3 --onefile -o external_controller.bin worker_manager/main.py
-
       - name: Package into a single tgz
-        run: tar -czvf ciy-runner-$PACKAGE_VERSION.tgz external_controller.bin ciy.qcow2
+        run: tar -czvf ciy-vm-$PACKAGE_VERSION.tgz ciy.qcow2
 
       - name: Upload to registry
         run: |
           PACKAGE_REGISTRY_URL="https://gitlab.com/api/v4/projects/54080196/packages/generic/ciy-client-runner/$PACKAGE_VERSION"
-          curl --header "PRIVATE-TOKEN: glpat-3zqVQwKxwU_Qsvc_8fw8" --upload-file ciy-runner-$PACKAGE_VERSION.tgz $PACKAGE_REGISTRY_URL/ciy-runner-$PACKAGE_VERSION-linux-amd64.tgz
+          curl --header "PRIVATE-TOKEN: glpat-3zqVQwKxwU_Qsvc_8fw8" --upload-file ciy-vm-$PACKAGE_VERSION.tgz $PACKAGE_REGISTRY_URL/ciy-vm-$PACKAGE_VERSION-amd64.tgz
 
