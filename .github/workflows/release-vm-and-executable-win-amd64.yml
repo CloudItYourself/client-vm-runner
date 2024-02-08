@@ -7,6 +7,7 @@ jobs:
     runs-on: [self-hosted, Windows]
     env:
       PACKAGE_VERSION: 1.0.0
+      PACKAGE_REGISTRY_URL: https://gitlab.com/api/v4/projects/54080196/packages/generic/ciy-client-runner/
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
@@ -32,13 +33,12 @@ jobs:
         run: python setup.py install
 
       - name: Build external_application
-        run: nuitka --onefile -o external_controller.exe worker_manager/main.py
+        run: nuitka --assume-yes-for-downloads --onefile -o external_controller.exe worker_manager/main.py 
 
       - name: Package into a single tgz
         run: tar -czvf ciy-runner-$PACKAGE_VERSION.tgz external_controller.exe
 
       - name: Upload to registry
         run: |
-          PACKAGE_REGISTRY_URL="https://gitlab.com/api/v4/projects/54080196/packages/generic/ciy-client-runner/$PACKAGE_VERSION"
-          curl --header "PRIVATE-TOKEN: glpat-3zqVQwKxwU_Qsvc_8fw8" --upload-file ciy-runner-$PACKAGE_VERSION.tgz $PACKAGE_REGISTRY_URL/ciy-runner-$PACKAGE_VERSION-win-amd64.tgz
+          curl --header "PRIVATE-TOKEN: glpat-3zqVQwKxwU_Qsvc_8fw8" --upload-file ciy-runner-$PACKAGE_VERSION.tgz $PACKAGE_REGISTRY_URL/$PACKAGE_VERSION/ciy-runner-$PACKAGE_VERSION-win-amd64.tgz
 
