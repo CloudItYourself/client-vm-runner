@@ -1,4 +1,4 @@
-name: Build vm for linux amd64
+name: Build executable for windows amd64
 run-name: ${{ github.actor }}
 on: [ push ]
 jobs:

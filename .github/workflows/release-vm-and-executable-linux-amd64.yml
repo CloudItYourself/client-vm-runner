@@ -1,4 +1,4 @@
-name: Build vm for linux amd64
+name: Build executable for linux amd64
 run-name: ${{ github.actor }}
 on: [ push ]
 jobs:
@@ -25,31 +25,8 @@ jobs:
       - name: Install project dependencies
         run: pip install --extra-index-url=https://ci-python-package-user:glpat-3zqVQwKxwU_Qsvc_8fw8@gitlab.com/api/v4/projects/54080196/packages/pypi/simple -r requirements.txt
 
-      - name: Build internal_controller_package
-        run: python internal_controller_setup.py install
-
       - name: Install nuitka
         run: pip install nuitka
-
-      - name: Install build tools
-        run: apt install patchelf gcc -y
-
-      - name: Build internal_controller_executable
-        run: nuitka3 --onefile --include-data-dir=./internal_controller/resources=internal_controller/resources internal_controller/main.py -o internal_controller.bin
-
-      - name: Docker login
-        run: docker login -u u -p glpat-MUekjoxQDubT9QoHyuEx registry.gitlab.com/ronen48/ciy
-
-      - name: Docker build
-        run: docker build . -f internal_controller_dockerfile -t registry.gitlab.com/ronen48/ciy/cloud-iy-vm:latest
-
-      - name: Docker pull linkacloud
-        run: docker pull linkacloud/d2vm
-
-      - name: Convert to vm
-        run: |
-            RAND=$(openssl rand -base64  32)
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --privileged -v "$PWD":/d2vm -w /d2vm linkacloud/d2vm:latest convert registry.gitlab.com/ronen48/ciy/cloud-iy-vm:latest -o ciy.qcow2 -p $RAND
 
       - name: Build external_controller
         run: python setup.py install
@@ -58,7 +35,7 @@ jobs:
         run: nuitka3 --onefile -o external_controller.bin worker_manager/main.py
 
       - name: Package into a single tgz
-        run: tar -czvf ciy-runner-$PACKAGE_VERSION.tgz external_controller.bin ciy.qcow2
+        run: tar -czvf ciy-runner-$PACKAGE_VERSION.tgz external_controller.bin
 
       - name: Upload to registry
         run: |
