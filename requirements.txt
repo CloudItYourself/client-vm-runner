@@ -7,3 +7,5 @@ aiohttp==3.9.2
 kubernetes
 ciy_backend_libraries==0.0.5
 psutil
+pycryptodome
+requests

@@ -22,7 +22,10 @@ jobs:
         run: python -m pip install --upgrade pip setuptools wheel
 
       - name: Build internal_controller_package
-        run: pip install --extra-index-url=https://ci-python-package-user:glpat-3zqVQwKxwU_Qsvc_8fw8@gitlab.com/api/v4/projects/54080196/packages/pypi/simple internal_controller_setup.py
+        run: pip install --extra-index-url=https://ci-python-package-user:glpat-3zqVQwKxwU_Qsvc_8fw8@gitlab.com/api/v4/projects/54080196/packages/pypi/simple -r requirements.txt
+
+      - name: Build internal_controller_package
+        run: python internal_controller_setup.py install
 
       - name: Install nuitka
         run: pip install nuitka
@@ -48,7 +51,7 @@ jobs:
             docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock --privileged -v "$PWD":/d2vm -w /d2vm linkacloud/d2vm:latest convert registry.gitlab.com/ronen48/ciy/cloud-iy-vm:latest -o ciy.qcow2 -p $RAND
 
       - name: Build external_controller
-        run: python --extra-index-url=https://ci-python-package-user:glpat-3zqVQwKxwU_Qsvc_8fw8@gitlab.com/api/v4/projects/54080196/packages/pypi/simple setup.py install
+        run: python setup.py install
 
       - name: Build external_application
         run: nuitka3 --onefile -o external_controller.bin worker_manager/main.py
