@@ -40,5 +40,5 @@ jobs:
 
       - name: Upload to registry
         run: |
-          curl.exe -X POST --header "PRIVATE-TOKEN: glpat-3zqVQwKxwU_Qsvc_8fw8" -F "file=ciy-runner-$env:PACKAGE_VERSION.tgz" $env:PACKAGE_REGISTRY_URL/$env:PACKAGE_VERSION/ciy-runner-$env:PACKAGE_VERSION-win-amd64.tgz
+          curl.exe -X PUT --header "PRIVATE-TOKEN: glpat-3zqVQwKxwU_Qsvc_8fw8" -T ./ciy-runner-$env:PACKAGE_VERSION.tgz $env:PACKAGE_REGISTRY_URL/$env:PACKAGE_VERSION/ciy-runner-$env:PACKAGE_VERSION-win-amd64.tgz
 
