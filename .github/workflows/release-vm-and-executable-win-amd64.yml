@@ -36,9 +36,9 @@ jobs:
         run: nuitka --assume-yes-for-downloads --onefile -o external_controller.exe worker_manager/main.py 
 
       - name: Package into a single tgz
-        run: tar -czvf ciy-runner-%PACKAGE_VERSION%.tgz external_controller.exe
+        run: tar -czvf ciy-runner-$env:PACKAGE_VERSION.tgz external_controller.exe
 
       - name: Upload to registry
         run: |
-          curl -X POST --header "PRIVATE-TOKEN: glpat-3zqVQwKxwU_Qsvc_8fw8" -F "file=ciy-runner-%PACKAGE_VERSION%.tgz" %PACKAGE_REGISTRY_URL%/%PACKAGE_VERSION%/ciy-runner-%PACKAGE_VERSION%-win-amd64.tgz
+          curl.exe -X POST --header "PRIVATE-TOKEN: glpat-3zqVQwKxwU_Qsvc_8fw8" -F "file=ciy-runner-$env:PACKAGE_VERSION.tgz" $env:PACKAGE_REGISTRY_URL/$env:PACKAGE_VERSION/ciy-runner-$env:PACKAGE_VERSION-win-amd64.tgz
 
