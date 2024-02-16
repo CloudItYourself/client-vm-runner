@@ -33,7 +33,7 @@ jobs:
         run: python setup.py install
 
       - name: Build external_application
-        run: nuitka --assume-yes-for-downloads --onefile -o external_controller.exe worker_manager/main.py 
+        run: nuitka --assume-yes-for-downloads --include-package-data=websockets --include-package=websockets --onefile -o external_controller.exe worker_manager/main.py
 
       - name: Package into a single tgz
         run: tar -czvf ciy-runner-$env:PACKAGE_VERSION.tgz external_controller.exe
