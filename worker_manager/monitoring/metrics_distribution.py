@@ -3,7 +3,6 @@ import datetime
 import logging
 from typing import Final
 
-import aiohttp
 import psutil
 from ciy_backend_libraries.api.cluster_access.v1.node_registrar import NodeDetails
 from ciy_backend_libraries.api.scheduling.v1.metrics_report import WorkerMetrics

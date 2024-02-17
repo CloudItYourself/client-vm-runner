@@ -9,9 +9,9 @@ import string
 import tempfile
 import threading
 
-import aiohttp
+import requests
 import websockets
-from ciy_backend_libraries.api.cluster_access.v1.node_registrar import RegistrationDetails
+from ciy_backend_libraries.api.cluster_access.v1.node_registrar import RegistrationDetails, NodeDetails
 
 from internal_controller.installers.environment_installer import EnvironmentInstaller
 
@@ -44,8 +44,6 @@ class ConnectionHandler:
         self._background_keepalive_task = None
         self._initialization_data = None
         self._client = None
-        self._http_session = aiohttp.ClientSession()
-        self._http_lock = asyncio.Lock()
 
     async def connect_to_server(self):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -62,12 +60,17 @@ class ConnectionHandler:
     def initialization_data(self) -> HandshakeReceptionMessage:
         return self._initialization_data
 
+    @staticmethod
+    def send_post_request(url: str, details: NodeDetails):
+        return requests.post(url=f'{url}/api/v1/node_token',
+                             data=details.model_dump_json(),
+                             headers={"Content-Type": "application/json"}).json()
+
     async def get_node_join_details(self) -> RegistrationDetails:
-        async with self._http_lock:
-            response = await self._http_session.post(url=f'{self.initialization_data.server_url}/api/v1/node_token',
-                                                     data=self.initialization_data.machine_unique_identification.model_dump_json(),
-                                                     headers={"Content-Type": "application/json"})
-            return RegistrationDetails(**await response.json())
+        response = await self.loop.run_in_executor(None, ConnectionHandler.send_post_request,
+                                                   self.initialization_data.server_url,
+                                                   self.initialization_data.machine_unique_identification)
+        return RegistrationDetails(**await response)
 
     @staticmethod
     def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails) -> bool:
@@ -170,22 +173,20 @@ class ConnectionHandler:
         return False
 
     async def send_periodic_keepalive(self):
-        secondary_http_session = aiohttp.ClientSession()
         while True:
             try:
-                async with self._http_lock:
-                    await secondary_http_session.put(
-                        url=f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
+                await self.loop.run_in_executor(None, requests.get,
+                                                f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
             except Exception as e:
                 print(f"Failed to send keepalive...: {e}")
             await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
     async def is_node_online(self) -> bool:
         try:
-            async with self._http_lock:
-                result = await self._http_session.get(
-                    url=f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}')
-                return result.status == 200
+            url = f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}'
+            result: requests.Response = await self.loop.run_in_executor(None, requests.get, url)
+            return result.status_code == 200
+
         except Exception as e:
             print(f"Failed to send node_exists...: {e}")
             return False
