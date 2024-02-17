@@ -44,6 +44,8 @@ class ConnectionHandler:
         self._background_keepalive_task = None
         self._initialization_data = None
         self._client = None
+        self._http_session = aiohttp.ClientSession()
+        self._http_lock = asyncio.Lock()
 
     async def connect_to_server(self):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -61,10 +63,10 @@ class ConnectionHandler:
         return self._initialization_data
 
     async def get_node_join_details(self) -> RegistrationDetails:
-        async with aiohttp.ClientSession() as session:
-            response = await session.post(url=f'{self.initialization_data.server_url}/api/v1/node_token',
-                                          data=self.initialization_data.machine_unique_identification.model_dump_json(),
-                                          headers={"Content-Type": "application/json"})
+        async with self._http_lock:
+            response = await self._http_session.post(url=f'{self.initialization_data.server_url}/api/v1/node_token',
+                                                     data=self.initialization_data.machine_unique_identification.model_dump_json(),
+                                                     headers={"Content-Type": "application/json"})
             return RegistrationDetails(**await response.json())
 
     @staticmethod
@@ -168,10 +170,11 @@ class ConnectionHandler:
         return False
 
     async def send_periodic_keepalive(self):
+        secondary_http_session = aiohttp.ClientSession()
         while True:
             try:
-                async with aiohttp.ClientSession() as session:
-                    await session.put(
+                async with self._http_lock:
+                    await secondary_http_session.put(
                         url=f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
             except Exception as e:
                 print(f"Failed to send keepalive...: {e}")
@@ -179,8 +182,8 @@ class ConnectionHandler:
 
     async def is_node_online(self) -> bool:
         try:
-            async with aiohttp.ClientSession() as session:
-                result = await session.get(
+            async with self._http_lock:
+                result = await self._http_session.get(
                     url=f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}')
                 return result.status == 200
         except Exception as e:
