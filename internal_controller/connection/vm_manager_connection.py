@@ -175,7 +175,7 @@ class ConnectionHandler:
     async def send_periodic_keepalive(self):
         while True:
             try:
-                await self.loop.run_in_executor(None, requests.get,
+                await self.loop.run_in_executor(None, requests.put,
                                                 f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
             except Exception as e:
                 print(f"Failed to send keepalive...: {e}")
