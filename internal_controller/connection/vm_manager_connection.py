@@ -70,7 +70,7 @@ class ConnectionHandler:
         response = await self.loop.run_in_executor(None, ConnectionHandler.send_post_request,
                                                    self.initialization_data.server_url,
                                                    self.initialization_data.machine_unique_identification)
-        return RegistrationDetails(**await response)
+        return RegistrationDetails(**response)
 
     @staticmethod
     def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails) -> bool:
