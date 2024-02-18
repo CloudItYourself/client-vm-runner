@@ -35,7 +35,7 @@ jobs:
         run: apt install patchelf gcc -y
 
       - name: Build internal_controller_executable
-        run: nuitka3 --onefile --include-data-dir=./internal_controller/resources=internal_controller/resources internal_controller/main.py -o internal_controller.bin
+        run: nuitka3 --onefile --include-package-data=websockets --include-package=websockets --include-data-dir=./internal_controller/resources=internal_controller/resources internal_controller/main.py -o internal_controller.bin
 
       - name: Docker login
         run: docker login -u u -p glpat-MUekjoxQDubT9QoHyuEx registry.gitlab.com/ronen48/ciy
