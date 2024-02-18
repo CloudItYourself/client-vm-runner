@@ -13,6 +13,7 @@ import requests
 import websockets
 from ciy_backend_libraries.api.cluster_access.v1.node_registrar import RegistrationDetails, NodeDetails
 
+from internal_controller import LOGGER_NAME
 from internal_controller.installers.environment_installer import EnvironmentInstaller
 
 from concurrent.futures import ProcessPoolExecutor
@@ -37,6 +38,7 @@ class ConnectionHandler:
         self.stop_event = threading.Event()
         self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
+        self._logger = logging.getLogger(LOGGER_NAME)
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
         self._node_name = ''.join(random.choices(string.ascii_lowercase, k=16))
         self._port = port
@@ -44,6 +46,7 @@ class ConnectionHandler:
         self._background_keepalive_task = None
         self._initialization_data = None
         self._client = None
+        self._http_lock = asyncio.Lock()
 
     async def connect_to_server(self):
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -112,14 +115,14 @@ class ConnectionHandler:
                     HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Initializing k3s",
                                       SECRET_KEY=response.secret_key).model_dump_json())
 
-                logging.info("Initializing tailscale")
+                self._logger.info("Initializing tailscale")
                 initialization_successful = await self.loop.run_in_executor(self._process_pool,
                                                                             EnvironmentInstaller.install_tailscale)
-                logging.info(
+                self._logger.info(
                     f"Initializing tailscale with status: {'success' if initialization_successful else 'failure'}")
                 registration_details = await self.get_node_join_details()
 
-                logging.info(f"Node registration details received.. writing VPN details to file")
+                self._logger.info(f"Node registration details received.. writing VPN details to file")
 
                 self._background_keepalive_task = self.loop.create_task(
                     self.send_periodic_keepalive())  # start periodic keepalive
@@ -133,6 +136,7 @@ class ConnectionHandler:
 
                 if not initialization_successful:
                     err_msg = 'Failed to initialize installers.. terminating'
+                    self._logger.error(err_msg)
                     await websocket.send(
                         HandshakeResponse(STATUS=HandshakeStatus.FAILURE, DESCRIPTION=err_msg).model_dump_json())
                     await self.close_comms(websocket)
@@ -144,7 +148,7 @@ class ConnectionHandler:
                 return
 
             except ValidationError as e:
-                logging.error(
+                self._logger.error(
                     f"Received invalid internal initialization data, validation error: {e.cause}, worker will be ignored")
                 return
 
@@ -175,30 +179,32 @@ class ConnectionHandler:
     async def send_periodic_keepalive(self):
         while True:
             try:
-                await self.loop.run_in_executor(None, requests.put,
-                                                f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
+                async with self._http_lock:
+                    await self.loop.run_in_executor(None, requests.put,
+                                                    f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
             except Exception as e:
-                print(f"Failed to send keepalive...: {e}")
+                self._logger.exception(f"Failed to send keepalive...: {e}")
             await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
     async def is_node_online(self) -> bool:
         try:
-            url = f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}'
-            result: requests.Response = await self.loop.run_in_executor(None, requests.get, url)
-            return result.status_code == 200
+            async with self._http_lock:
+                url = f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}'
+                result: requests.Response = await self.loop.run_in_executor(None, requests.get, url)
+                return result.status_code == 200
 
         except Exception as e:
-            print(f"Failed to send node_exists...: {e}")
+            self._logger.exception(f"Failed to send node_exists...: {e}")
             return False
 
     async def main_loop(self):
         await self.run_until_handshake_complete()
         await self.connect_to_server()
-        print("Connection accepted")
+        self._logger.info("Connection accepted")
 
         while True:
             if await self.check_for_node_connection(10) is False:
-                print("Exiting.. node not online")
+                self._logger.error("Exiting.. node not online")
                 return
 
             await asyncio.sleep(1)

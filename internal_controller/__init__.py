@@ -1,0 +1,1 @@
+LOGGER_NAME='client-vm-runner-internal'
