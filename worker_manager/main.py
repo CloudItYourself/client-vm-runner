@@ -1,12 +1,17 @@
 import asyncio
 import logging
 import sys
+
+import uvicorn
 from ciy_backend_libraries.general.logging import initialize_logger
+from fastapi import FastAPI
+
 from utilities.machine_identification import get_machine_unique_id
 from worker_manager import LOGGER_NAME
 from worker_manager.configuration.configuration_manager import ConfigurationManager
 from worker_manager.vm_manager.internal_controller_comms import InternalControllerComms
 from worker_manager.monitoring.metrics_distribution import MetricsDistribution
+from worker_manager.vm_state_api.vm_state_api import VMStateAPI
 
 
 async def maintenance_loop(internal_vm_comms: InternalControllerComms, metrics_reporter: MetricsDistribution):
@@ -36,7 +41,12 @@ def main():
     metrics_handler = MetricsDistribution(config.config.server_url, machine_details, internal_vm_comms)
     event_loop.run_until_complete(internal_vm_comms.wait_for_full_vm_connection())
     event_loop.create_task(metrics_handler.periodically_publish_details())
-    event_loop.run_until_complete(maintenance_loop(internal_vm_comms, metrics_handler))
+    event_loop.create_task(maintenance_loop(internal_vm_comms, metrics_handler))
+    vm_api = VMStateAPI(metrics_handler)
+    app = FastAPI()
+    app.include_router(vm_api.router)
+    uvicorn.run(app, host="localhost", port=28253, loop="asyncio")
+
 
 
 if __name__ == '__main__':

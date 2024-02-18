@@ -35,7 +35,8 @@ class MetricsDistribution:
                              total_memory_available=memory_stats.total / (1024 * 1024),
                              vm_cpu_utilization=vm_cpu_utilization,
                              vm_cpu_allocated=vm_cpu_allocated,
-                             vm_memory_used=vm_memory_used)
+                             vm_memory_used=vm_memory_used,
+                             vm_memory_available=vm_memory_available)
 
     async def periodically_publish_details(self):
         while True:
