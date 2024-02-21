@@ -27,6 +27,12 @@ async def maintenance_loop(internal_vm_comms: InternalControllerComms, metrics_r
         await asyncio.sleep(5)
 
 
+def fast_api_thread(metrics_handler: MetricsDistribution):
+    vm_api = VMStateAPI(metrics_handler)
+    app = FastAPI()
+    app.include_router(vm_api.router)
+    uvicorn.run(app, host="localhost", port=28253, loop="asyncio")
+
 def main():
     config = ConfigurationManager()
     event_loop = asyncio.new_event_loop()
@@ -42,10 +48,7 @@ def main():
     event_loop.run_until_complete(internal_vm_comms.wait_for_full_vm_connection())
     event_loop.create_task(metrics_handler.periodically_publish_details())
     event_loop.create_task(maintenance_loop(internal_vm_comms, metrics_handler))
-    vm_api = VMStateAPI(metrics_handler)
-    app = FastAPI()
-    app.include_router(vm_api.router)
-    uvicorn.run(app, host="localhost", port=28253, loop="asyncio")
+    event_loop.run_until_complete(event_loop.run_in_executor(None, fast_api_thread, metrics_handler))
 
 
 
