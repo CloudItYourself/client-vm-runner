@@ -12,7 +12,7 @@ from worker_manager.vm_manager.internal_controller_comms import InternalControll
 
 
 class MetricsDistribution:
-    INTERVAL_BETWEEN_METRICS_IN_SEC: Final[int] = 1
+    INTERVAL_BETWEEN_METRICS_IN_SEC: Final[int] = 0.1
 
     def __init__(self, server_url: str, node_details: NodeDetails,
                  internal_comms_handler: InternalControllerComms):
