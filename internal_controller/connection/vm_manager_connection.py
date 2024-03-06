@@ -3,9 +3,7 @@ import json
 import logging
 import os
 import pathlib
-import random
 import ssl
-import string
 import tempfile
 import threading
 
@@ -40,7 +38,7 @@ class ConnectionHandler:
         asyncio.set_event_loop(self.loop)
         self._logger = logging.getLogger(LOGGER_NAME)
         self.stop = self.loop.run_in_executor(None, self.stop_event.wait)
-        self._node_name = ''.join(random.choices(string.ascii_lowercase, k=16))
+        self._node_name = None
         self._port = port
         self._process_pool = ProcessPoolExecutor()
         self._background_keepalive_task = None
@@ -110,7 +108,7 @@ class ConnectionHandler:
                 response = HandshakeReceptionMessage(**data)
 
                 self._initialization_data = response
-
+                self. _node_name = str(self._initialization_data.machine_unique_identification)
                 await websocket.send(
                     HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Initializing k3s",
                                       SECRET_KEY=response.secret_key).model_dump_json())
