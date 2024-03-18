@@ -42,7 +42,7 @@ def main():
                                                 qemu_installation_location=config.config.qemu_installation_location)
 
     machine_details = get_machine_unique_id()
-    metrics_handler = MetricsDistribution(config.config.server_url)
+    metrics_handler = MetricsDistribution(internal_vm_comms)
     event_loop.run_until_complete(internal_vm_comms.wait_for_full_vm_connection())
     event_loop.create_task(maintenance_loop(internal_vm_comms))
     event_loop.run_until_complete(
