@@ -108,7 +108,7 @@ class ConnectionHandler:
                 response = HandshakeReceptionMessage(**data)
 
                 self._initialization_data = response
-                self. _node_name = str(self._initialization_data.machine_unique_identification)
+                self._node_name = str(self._initialization_data.machine_unique_identification)
                 await websocket.send(
                     HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Initializing k3s",
                                       SECRET_KEY=response.secret_key).model_dump_json())
@@ -178,17 +178,23 @@ class ConnectionHandler:
         while True:
             try:
                 async with self._http_lock:
-                    await self.loop.run_in_executor(None, requests.put,
-                                                    f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
+                    future = self.loop.run_in_executor(None, requests.put,
+                                                       f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
+
+                    await asyncio.wait_for(future, timeout=ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
+                    await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
             except Exception as e:
                 self._logger.exception(f"Failed to send keepalive...: {e}")
-            await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
+
 
     async def is_node_online(self) -> bool:
         try:
             async with self._http_lock:
                 url = f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}'
-                result: requests.Response = await self.loop.run_in_executor(None, requests.get, url)
+                future = self.loop.run_in_executor(None, requests.get, url)
+                await asyncio.wait_for(future, timeout=2) # two seconds to verify
+
+                result: requests.Response = await future
                 return result.status_code == 200
 
         except Exception as e:
