@@ -76,6 +76,13 @@ class ConnectionHandler:
     @staticmethod
     def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails) -> bool:
         os.environ['INVOCATION_ID'] = ""
+
+        os.system('ip link delete cilium_host')
+        os.system('ip link delete cilium_net')
+        os.system('ip link delete cilium_vxlan')
+
+        os.system('iptables-save | grep -iv cilium | iptables-restore')
+        os.system('ip6tables-save | grep -iv cilium | ip6tables-restore')
         k3s_uninstall = pathlib.Path('/usr/local/bin/k3s-agent-uninstall.sh')
         if k3s_uninstall.exists():
             k3s_path = pathlib.Path('/usr/local/bin/k3s')
@@ -108,7 +115,7 @@ class ConnectionHandler:
                 response = HandshakeReceptionMessage(**data)
 
                 self._initialization_data = response
-                self._node_name = str(self._initialization_data.machine_unique_identification)
+                self. _node_name = str(self._initialization_data.machine_unique_identification)
                 await websocket.send(
                     HandshakeResponse(STATUS=HandshakeStatus.INITIALIZING, DESCRIPTION="Initializing k3s",
                                       SECRET_KEY=response.secret_key).model_dump_json())
@@ -179,7 +186,7 @@ class ConnectionHandler:
             try:
                 async with self._http_lock:
                     future = self.loop.run_in_executor(None, requests.put,
-                                                       f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
+                                                    f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
 
                     await asyncio.wait_for(future, timeout=ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
                     await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
