@@ -76,13 +76,6 @@ class ConnectionHandler:
     @staticmethod
     def run_k3s_agent_in_background(node_name: str, registration_details: RegistrationDetails) -> bool:
         os.environ['INVOCATION_ID'] = ""
-
-        os.system('ip link delete cilium_host')
-        os.system('ip link delete cilium_net')
-        os.system('ip link delete cilium_vxlan')
-
-        os.system('iptables-save | grep -iv cilium | iptables-restore')
-        os.system('ip6tables-save | grep -iv cilium | ip6tables-restore')
         k3s_uninstall = pathlib.Path('/usr/local/bin/k3s-agent-uninstall.sh')
         if k3s_uninstall.exists():
             k3s_path = pathlib.Path('/usr/local/bin/k3s')
@@ -185,23 +178,17 @@ class ConnectionHandler:
         while True:
             try:
                 async with self._http_lock:
-                    future = self.loop.run_in_executor(None, requests.put,
+                    await self.loop.run_in_executor(None, requests.put,
                                                     f'{self.initialization_data.server_url}/api/v1/node_keepalive/{self._node_name}')
-
-                    await asyncio.wait_for(future, timeout=ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
-                    await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
             except Exception as e:
                 self._logger.exception(f"Failed to send keepalive...: {e}")
-
+            await asyncio.sleep(ConnectionHandler.KEEPALIVE_REFRESH_TIME_IN_SECONDS)
 
     async def is_node_online(self) -> bool:
         try:
             async with self._http_lock:
                 url = f'{self.initialization_data.server_url}/api/v1/node_exists/{self._node_name}'
-                future = self.loop.run_in_executor(None, requests.get, url)
-                await asyncio.wait_for(future, timeout=2) # two seconds to verify
-
-                result: requests.Response = await future
+                result: requests.Response = await self.loop.run_in_executor(None, requests.get, url)
                 return result.status_code == 200
 
         except Exception as e:
