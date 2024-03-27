@@ -1,7 +1,7 @@
 FROM registry.gitlab.com/ronen48/ciy/python-311:latest
 
 RUN apt-get update -y
-RUN apt upgrade -y
+RUN apt upgrade --fix-missing -y
 RUN apt install iptables wget dos2unix -y
 
 COPY internal_controller/startup.rc.local /etc/rc.local
