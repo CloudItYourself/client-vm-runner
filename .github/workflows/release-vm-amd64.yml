@@ -49,7 +49,7 @@ jobs:
       - name: Convert to vm
         run: |
             RAND=$(openssl rand -base64  32)
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --privileged -v "$PWD":/d2vm -w /d2vm linkacloud/d2vm:latest convert registry.gitlab.com/ronen48/ciy/cloud-iy-vm:latest -o ciy.qcow2 -p ronen
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock --privileged -v "$PWD":/d2vm -w /d2vm linkacloud/d2vm:latest convert registry.gitlab.com/ronen48/ciy/cloud-iy-vm:latest -o ciy.qcow2 -p $RAND
 
       - name: Package into a single tgz
         run: tar -czvf ciy-vm-$PACKAGE_VERSION.tgz ciy.qcow2

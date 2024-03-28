@@ -8,7 +8,7 @@ from worker_manager import LOGGER_NAME
 
 
 class QemuInitializer:
-    QEMU_COMMAND = r'{qemu_installation_location} -smp {cpu} -m {memory} -drive format=qcow2,file={image} -nic user,model=virtio-net-pci,hostfwd=tcp::{tcp_port}-:39019 --accel whpx -display none'
+    QEMU_COMMAND = r'{qemu_installation_location} -smp {cpu} -m {memory} -drive format=qcow2,file={image} -nic user,net=192.168.76.0/24,model=virtio-net-pci,hostfwd=tcp::{tcp_port}-:39019 --accel whpx -display none'
 
     def __init__(self, core_count: int, memory_size: int,
                  image_location: str, qemu_installation_location: str):
